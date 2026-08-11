@@ -1,0 +1,2966 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مساعد المذاكرة الذكي — Study Flow Tracker</title>
+
+    <!-- ============================================
+         Tailwind CSS via CDN
+         ============================================ -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- ============================================
+         Google Fonts — Cairo for Arabic, Orbitron for numbers
+         ============================================ -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Orbitron:wght@600;800&display=swap" rel="stylesheet">
+
+    <!-- ============================================
+         Custom <style> — Cyberpunk Arabic Theme
+         ============================================ -->
+    <style>
+        /* ---------- Root CSS variables for the cyberpunk palette ---------- */
+        :root {
+            --neon-purple: #a855f7;
+            --neon-blue:   #38bdf8;
+            --neon-pink:   #ec4899;
+            --neon-green:  #34d399;
+            --bg-dark:     #0a0a14;
+            --bg-card:     #13131f;
+            --bg-input:    #1a1a2e;
+            --border-glow: rgba(168, 85, 247, 0.35);
+            --text-primary: #f1f5f9;
+            --text-muted:   #94a3b8;
+        }
+
+        * { box-sizing: border-box; }
+
+        html, body {
+            font-family: 'Cairo', 'Segoe UI', Tahoma, Geneva, Arial, sans-serif !important;
+        }
+        body {
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        /* ---------- Animated grid background ---------- */
+        .cyber-grid-bg {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background-image:
+                linear-gradient(rgba(168, 85, 247, 0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(56, 189, 248, 0.04) 1px, transparent 1px);
+            background-size: 40px 40px;
+            animation: grid-drift 20s linear infinite;
+        }
+
+        @keyframes grid-drift {
+            from { background-position: 0 0; }
+            to   { background-position: 40px 40px; }
+        }
+
+        /* ---------- Floating glow orbs ---------- */
+        .glow-orb {
+            position: fixed;
+            border-radius: 50%;
+            filter: blur(80px);
+            z-index: -1;
+            opacity: 0.25;
+            pointer-events: none;
+        }
+        .glow-orb.purple { background: var(--neon-purple); width: 400px; height: 400px; top: -100px; left: -100px; }
+        .glow-orb.blue   { background: var(--neon-blue);   width: 350px; height: 350px; bottom: -80px; right: -80px; }
+
+        /* ---------- Orbitron font for timer numbers ---------- */
+        .font-display { font-family: 'Orbitron', sans-serif; }
+
+        /* ---------- Glassmorphism card ---------- */
+        .glass-card {
+            background: rgba(19, 19, 31, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(168, 85, 247, 0.15);
+        }
+
+        /* ---------- Tool squares (Yazeed-AI style) ---------- */
+        .tool-square {
+            background: rgba(19, 19, 31, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(168, 85, 247, 0.2);
+            border-radius: 1rem;
+            padding: 1rem 0.75rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+            text-align: center;
+            aspect-ratio: 1 / 1;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .tool-square:hover {
+            border-color: rgba(168, 85, 247, 0.6);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(168, 85, 247, 0.15);
+        }
+        .tool-square .tool-icon { font-size: 1.9rem; }
+        .tool-square .tool-name {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: #d8b4fe;
+        }
+        .tool-square .tool-desc {
+            font-size: 0.62rem;
+            color: #94a3b8;
+            line-height: 1.3;
+        }
+
+        /* ---------- Full-screen overlay screens ---------- */
+        .app-screen {
+            position: fixed;
+            inset: 0;
+            z-index: 100;
+            background: #0b0b16;
+            display: none;
+            flex-direction: column;
+        }
+        .app-screen.open { display: flex; }
+        .app-screen-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid rgba(168, 85, 247, 0.2);
+            background: rgba(19, 19, 31, 0.9);
+            flex-shrink: 0;
+        }
+        .app-screen-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem 1.25rem;
+        }
+        .screen-back-btn {
+            background: rgba(168, 85, 247, 0.15);
+            border: 1px solid rgba(168, 85, 247, 0.3);
+            color: #d8b4fe;
+            border-radius: 0.6rem;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.85rem;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        /* ---------- Flashcard 3D flip (tuned to feel like a real physical flip) ---------- */
+        .flash-scene { perspective: 1400px; }
+        .flash-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transition: transform 0.65s cubic-bezier(0.45, 0.05, 0.15, 1);
+            transform-style: preserve-3d;
+        }
+        .flash-inner.flipped {
+            transform: rotateY(180deg);
+        }
+        .flash-face {
+            position: absolute;
+            inset: 0;
+            -webkit-backface-visibility: hidden;
+            backface-visibility: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 10px;
+            border-radius: 1rem;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.35);
+            transition: box-shadow 0.65s ease;
+        }
+        .flash-inner.flipped .flash-face.back {
+            box-shadow: 0 10px 24px rgba(168,85,247,0.35);
+        }
+        .flash-face.back { transform: rotateY(180deg); }
+
+        /* ---------- Thinking / loading dots ---------- */
+        .thinking-dots span {
+            display: inline-block;
+            animation: dotBounce 1.4s infinite ease-in-out;
+        }
+        .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes dotBounce {
+            0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+            40% { transform: translateY(-5px); opacity: 1; }
+        }
+
+        /* ---------- Flashcards "wardrobe" sliding carousel ---------- */
+        .flash-carousel {
+            display: flex;
+            gap: 14px;
+            overflow-x: auto;
+            scroll-snap-type: x mandatory;
+            padding: 10px 6px 18px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .flash-carousel::-webkit-scrollbar { height: 5px; }
+        .flash-carousel::-webkit-scrollbar-thumb { background: rgba(168,85,247,0.3); border-radius: 10px; }
+        .flash-card-slot {
+            scroll-snap-align: center;
+            flex: 0 0 auto;
+            width: 150px;
+            height: 150px;
+            animation: slideInCard 0.45s ease both;
+        }
+        @keyframes slideInCard {
+            from { opacity: 0; transform: translateX(30px) scale(0.9); }
+            to   { opacity: 1; transform: translateX(0) scale(1); }
+        }
+
+        /* ---------- Neon text glow ---------- */
+        .neon-text {
+            text-shadow:
+                0 0 8px rgba(168, 85, 247, 0.5),
+                0 0 20px rgba(168, 85, 247, 0.3);
+        }
+
+        /* ---------- Neon input focus ---------- */
+        .neon-input:focus {
+            outline: none;
+            border-color: var(--neon-purple);
+            box-shadow:
+                0 0 0 3px rgba(168, 85, 247, 0.15),
+                0 0 15px rgba(168, 85, 247, 0.2);
+        }
+
+        /* ---------- Button neon hover ---------- */
+        .btn-neon {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        .btn-neon::before {
+            content: '';
+            position: absolute;
+            top: 0; right: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(270deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: right 0.5s ease;
+        }
+        .btn-neon:hover::before { right: 100%; }
+        .btn-neon:hover {
+            box-shadow: 0 0 20px rgba(168, 85, 247, 0.5);
+            transform: translateY(-1px);
+        }
+
+        /* ---------- Diary item slide-in animation ---------- */
+        @keyframes slide-in {
+            from { opacity: 0; transform: translateX(20px); }
+            to   { opacity: 1; transform: translateX(0); }
+        }
+        .diary-item { animation: slide-in 0.3s ease forwards; }
+
+        /* ---------- Timer ring ---------- */
+        .timer-ring {
+            transform: rotate(-90deg);
+            transform-origin: center;
+        }
+        .timer-ring circle {
+            transition: stroke-dashoffset 1s linear;
+        }
+
+        /* ---------- Pulse animation ---------- */
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 5px rgba(56, 189, 248, 0.4); }
+            50%      { box-shadow: 0 0 20px rgba(56, 189, 248, 0.7); }
+        }
+        .pulse-glow { animation: pulse-glow 2s ease-in-out infinite; }
+
+        /* ---------- Delete button hover ---------- */
+        .delete-btn { transition: all 0.2s ease; }
+        .delete-btn:hover { color: var(--neon-pink); transform: scale(1.15); }
+
+        /* ---------- Scrollbar styling ---------- */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-dark); }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(168, 85, 247, 0.3);
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(168, 85, 247, 0.5); }
+
+        /* ---------- AI loading dots ---------- */
+        .ai-loading-dot {
+            display: inline-block;
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: var(--neon-blue);
+            margin: 0 3px;
+            animation: bounce-dot 1.4s infinite ease-in-out both;
+        }
+        .ai-loading-dot:nth-child(1) { animation-delay: -0.32s; }
+        .ai-loading-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes bounce-dot {
+            0%, 80%, 100% { transform: scale(0); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        /* ---------- Fade-in for AI advice ---------- */
+        @keyframes fade-in-up {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in-up { animation: fade-in-up 0.5s ease forwards; }
+
+        /* ---------- Session status glow ---------- */
+        .session-study-glow { box-shadow: 0 0 30px rgba(168, 85, 247, 0.3); }
+        .session-break-glow { box-shadow: 0 0 30px rgba(52, 211, 153, 0.3); }
+
+        /* ---------- Responsive ---------- */
+        @media (max-width: 640px) {
+            .hero-title { font-size: 1.5rem; }
+            .timer-text { font-size: 2.5rem !important; }
+        }
+    </style>
+
+    <!-- Firebase (compat SDK — works with plain <script> tags, no bundler needed) -->
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+</head>
+
+<body class="relative overflow-x-hidden">
+
+    <!-- ============ Mandatory Sign-In Gate ============ -->
+    <div id="authGateScreen" style="position:fixed; inset:0; z-index:200; background:radial-gradient(circle at top, #1e1240, #0b0b16 70%); display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; text-align:center;">
+        <div id="authGateLoading" class="text-center">
+            <div style="width:36px;height:36px;border:3px solid rgba(168,85,247,0.25);border-top-color:#a855f7;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 14px;"></div>
+            <p class="text-slate-500 text-xs">بيتأكد من حالة تسجيل دخولك...</p>
+        </div>
+        <div id="authGateContent" style="display:none;">
+            <div class="text-5xl mb-4">🧠</div>
+            <h1 class="font-display text-xl sm:text-2xl font-bold text-purple-300 mb-2">مساعد المذاكرة الذكي</h1>
+            <p class="text-slate-400 text-sm mb-8 max-w-xs">سجّل الدخول بحساب جوجل عشان بياناتك تتحفظلك سحابيًا وتقدر توصلها من أي جهاز</p>
+            <button id="googleSignInBtn"
+                    class="flex items-center gap-3 bg-white text-slate-800 font-bold text-sm px-6 py-3.5 rounded-xl shadow-lg hover:brightness-95 transition-all mx-auto">
+                <svg class="w-5 h-5" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.9 18.9 13 24 13c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 16.3 4 9.6 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.5 0 10.4-1.9 14.3-5.1l-6.6-5.4C29.6 35.5 26.9 36.5 24 36.5c-5.2 0-9.6-3.3-11.3-7.9l-6.6 5.1C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.3-4.1 5.7l6.6 5.4C41.4 35.9 44 30.3 44 24c0-1.3-.1-2.7-.4-3.5z"/></svg>
+                تسجيل الدخول بجوجل
+            </button>
+            <p id="authGateError" class="text-pink-400 text-xs mt-4"></p>
+        </div>
+    </div>
+    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+
+    <div id="appToast" style="position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px); z-index:200; opacity:0; transition:all 0.3s; background:linear-gradient(135deg,#1e1b3a,#0f0f2e); border:1px solid rgba(168,85,247,0.4); border-radius:12px; padding:10px 18px; font-size:12px; color:#e2e8f0; max-width:90vw; text-align:center; box-shadow:0 8px 24px rgba(0,0,0,0.5); pointer-events:none;"></div>
+
+
+    <!-- ========== Animated Cyberpunk Background ========== -->
+    <div class="cyber-grid-bg"></div>
+    <div class="glow-orb purple"></div>
+    <div class="glow-orb blue"></div>
+
+    <!-- ================================================
+         Main Container
+         ================================================ -->
+    <div id="mainAppContent" class="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10" style="display:none;">
+
+        <!-- ============ Header / Hero ============ -->
+        <header class="text-center mb-8 relative">
+            <button id="openAiChatBtn"
+                    class="absolute top-0 left-0 flex items-center gap-2 bg-gradient-to-r from-purple-600 to-sky-500 text-white text-xs sm:text-sm font-bold px-3 sm:px-4 py-2 rounded-xl shadow-lg shadow-purple-900/40 hover:brightness-110 transition-all">
+                <span>💬</span>
+                <span class="hidden sm:inline">تحدث مع الذكاء الاصطناعي</span>
+                <span class="sm:hidden">الشات</span>
+            </button>
+
+            <div id="userProfileChip" class="hidden absolute top-0 right-0 flex items-center gap-2 bg-slate-900/70 border border-sky-500/30 text-slate-200 text-xs font-bold px-2.5 py-1.5 rounded-xl shadow-lg">
+                <img id="userAvatar" src="" alt="" class="w-6 h-6 rounded-full border border-sky-400/40" />
+                <span id="userName" class="hidden sm:inline max-w-[90px] truncate"></span>
+                <button id="signOutBtn" class="text-pink-300 hover:text-pink-200 text-[11px] border-r border-slate-700 pr-2 mr-0.5">خروج</button>
+            </div>
+            <div id="syncStatus" class="absolute top-10 right-0 text-[10px] text-sky-400"></div>
+            <div class="inline-flex items-center gap-3 mb-3">
+                <!-- Neon brain logo -->
+                <svg class="w-9 h-9 text-purple-400" style="filter: drop-shadow(0 0 8px rgba(168,85,247,0.7))" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+                <h1 class="font-display hero-title text-2xl sm:text-3xl font-bold tracking-wider neon-text text-purple-300">
+                    مساعد المذاكرة الذكي
+                </h1>
+            </div>
+            <p class="text-sm text-slate-400 font-medium tracking-wide">
+                <span class="text-sky-400">// </span>تتبّع تدفّق المذاكرة — ركّز، لخّص، تطوّر
+            </p>
+        </header>
+
+        <!-- ============ Tools Grid (Yazeed-AI-style square buttons) ============ -->
+        <section class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+            <button class="tool-square" data-open="tasksScreen">
+                <span class="tool-icon">✅</span>
+                <span class="tool-name">المهام اليومية</span>
+                <span class="tool-desc">رتّب مهامك حسب الأولوية</span>
+            </button>
+            <button class="tool-square" data-open="scheduleScreen">
+                <span class="tool-icon">📅</span>
+                <span class="tool-name">جدول الحصص</span>
+                <span class="tool-desc">مواعيدك الأسبوعية بوضوح</span>
+            </button>
+            <button class="tool-square" data-open="statsScreen">
+                <span class="tool-icon">📊</span>
+                <span class="tool-name">الإحصائيات</span>
+                <span class="tool-desc">تقدمك ونشاطك بالتفصيل</span>
+            </button>
+            <button class="tool-square" data-open="flashcardsScreen">
+                <span class="tool-icon">🗂️</span>
+                <span class="tool-name">البطاقات التعليمية</span>
+                <span class="tool-desc">احفظ المصطلحات بسهولة</span>
+            </button>
+            <button class="tool-square" id="openAiChatBtn2">
+                <span class="tool-icon">💬</span>
+                <span class="tool-name">الذكاء الاصطناعي</span>
+                <span class="tool-desc">اسأل واشرح دروسك فورًا</span>
+            </button>
+        </section>
+
+        <!-- ============ Daily Stats Bar ============ -->
+        <section class="grid grid-cols-3 gap-3 sm:gap-4 mb-6">
+            <!-- Focus sessions today -->
+            <div class="glass-card rounded-xl p-3 sm:p-4 text-center">
+                <div class="text-2xl sm:text-3xl font-display font-bold text-purple-300" id="statSessions">0</div>
+                <div class="text-xs text-slate-400 mt-1">جلسات تركيز اليوم</div>
+            </div>
+            <!-- Focus time today -->
+            <div class="glass-card rounded-xl p-3 sm:p-4 text-center">
+                <div class="text-2xl sm:text-3xl font-display font-bold text-sky-300" id="statHours">0.0</div>
+                <div class="text-xs text-slate-400 mt-1">ساعات التركيز</div>
+            </div>
+            <!-- Diary entries today -->
+            <div class="glass-card rounded-xl p-3 sm:p-4 text-center">
+                <div class="text-2xl sm:text-3xl font-display font-bold text-pink-300" id="statEntries">0</div>
+                <div class="text-xs text-slate-400 mt-1">مدخلات سجل المعرفة</div>
+            </div>
+        </section>
+
+        <!-- ============ Due Reviews Banner (Spaced Repetition) ============ -->
+        <section id="reviewsSection" class="hidden glass-card rounded-2xl p-5 mb-6 border-2" style="border-color: rgba(56,189,248,0.4);">
+            <h2 class="font-display text-sm font-bold text-sky-300 tracking-widest uppercase mb-3">
+                🔁 مراجعات مستحقة اليوم
+            </h2>
+            <div id="reviewsList" class="space-y-2"></div>
+        </section>
+
+        <!-- ============ Weekly Progress Chart ============ -->
+        <section class="glass-card rounded-2xl p-5 sm:p-6 mb-6">
+            <h2 class="font-display text-sm font-bold text-purple-300 tracking-widest uppercase mb-4">
+                📊 آخر 7 أيام
+            </h2>
+            <div id="weeklyChart" class="flex items-end justify-between gap-2" style="height: 120px;"></div>
+        </section>
+
+        <!-- ============ Subjects Section ============ -->
+        <section class="glass-card rounded-2xl p-5 sm:p-6 mb-6" id="subjectsSection">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="font-display text-sm font-bold text-purple-300 tracking-widest uppercase">
+                    📚 المواد الدراسية
+                </h2>
+                <button id="addSubjectToggleBtn" class="text-xs bg-purple-600/30 hover:bg-purple-600/50 border border-purple-400/30 rounded-lg px-3 py-1.5 font-bold text-purple-200 transition-colors">
+                    ➕ إضافة مادة
+                </button>
+            </div>
+
+            <!-- Add subject form (hidden by default) -->
+            <div id="addSubjectForm" class="hidden flex flex-col sm:flex-row gap-2 mb-4">
+                <input type="text" id="newSubjectName" placeholder="اسم المادة (مثال: الجبر، اللغة الألمانية...)"
+                       maxlength="50"
+                       class="neon-input flex-1 bg-slate-900/70 border border-purple-500/30 rounded-xl px-4 py-2.5 text-slate-100 placeholder-slate-500 text-sm" />
+                <input type="date" id="newSubjectExamDate"
+                       class="neon-input bg-slate-900/70 border border-purple-500/30 rounded-xl px-3 py-2.5 text-slate-100 text-sm" />
+                <button id="confirmAddSubjectBtn"
+                        class="btn-neon font-bold text-sm px-5 py-2.5 rounded-xl text-white bg-gradient-to-r from-purple-600 to-sky-500 border border-purple-400/30 whitespace-nowrap">
+                    حفظ
+                </button>
+            </div>
+
+            <!-- Subject cards grid -->
+            <div id="subjectsList" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+
+            <!-- Empty state -->
+            <div id="subjectsEmptyState" class="text-center py-6">
+                <p class="text-slate-500 text-sm">لسه مضفتش أي مادة. دوس "إضافة مادة" وابدأ تتابع تقدمك 📈</p>
+            </div>
+        </section>
+
+        <!-- ============ Mistake Log Section ============ -->
+        <section class="glass-card rounded-2xl p-5 sm:p-6 mb-6" id="mistakesSection">
+            <h2 class="font-display text-sm font-bold text-pink-300 tracking-widest uppercase mb-4">
+                ❌ سجل الأخطاء
+            </h2>
+
+            <div class="flex flex-col sm:flex-row gap-2 mb-4">
+                <select id="mistakeSubjectSelect"
+                        class="neon-input bg-slate-900/70 border border-purple-500/30 rounded-xl px-3 py-2.5 text-slate-100 text-sm sm:w-1/3">
+                    <option value="">مادة عامة</option>
+                </select>
+                <input type="text" id="mistakeText" placeholder="اكتب الخطأ اللي عايز تفتكره (مثال: بلخبط بين همزة القطع والوصل)"
+                       maxlength="200"
+                       class="neon-input flex-1 bg-slate-900/70 border border-purple-500/30 rounded-xl px-4 py-2.5 text-slate-100 placeholder-slate-500 text-sm" />
+                <button id="addMistakeBtn"
+                        class="btn-neon font-bold text-sm px-5 py-2.5 rounded-xl text-white bg-gradient-to-r from-pink-600 to-purple-500 border border-pink-400/30 whitespace-nowrap">
+                    إضافة
+                </button>
+            </div>
+
+            <div id="mistakesList" class="space-y-2"></div>
+            <div id="mistakesEmptyState" class="text-center py-4">
+                <p class="text-slate-500 text-sm">مفيش أخطاء متسجلة — يا بختك 🎉 (أو لسه ماحطيتش أي حاجة)</p>
+            </div>
+        </section>
+
+        <!-- ============ Pomodoro Timer Section ============ -->
+        <section class="glass-card rounded-2xl p-6 sm:p-8 mb-6 text-center" id="timerCard">
+            <!-- Session type label -->
+            <div class="flex items-center justify-center gap-2 mb-4">
+                <span class="w-2.5 h-2.5 rounded-full bg-purple-400 pulse-glow" id="sessionDot"></span>
+                <h2 class="font-display text-sm font-bold text-purple-300 tracking-widest uppercase" id="sessionLabel">
+                    جلسة مذاكرة
+                </h2>
+            </div>
+
+            <!-- Timer ring + display -->
+            <div class="relative inline-flex items-center justify-center mb-6">
+                <!-- SVG progress ring -->
+                <svg class="timer-ring" width="220" height="220" viewBox="0 0 220 220">
+                    <!-- Background circle -->
+                    <circle cx="110" cy="110" r="100" fill="none" stroke="rgba(168,85,247,0.1)" stroke-width="6" />
+                    <!-- Progress circle -->
+                    <circle id="timerRing" cx="110" cy="110" r="100" fill="none"
+                            stroke="url(#timerGradient)" stroke-width="6"
+                            stroke-linecap="round"
+                            stroke-dasharray="628.318"
+                            stroke-dashoffset="0"
+                            style="filter: drop-shadow(0 0 8px rgba(168,85,247,0.5));" />
+                    <!-- Gradient definition -->
+                    <defs>
+                        <linearGradient id="timerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#a855f7" />
+                            <stop offset="100%" stop-color="#38bdf8" />
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <!-- Time text overlay -->
+                <div class="absolute inset-0 flex flex-col items-center justify-center">
+                    <span class="font-display timer-text text-5xl font-bold text-slate-100" id="timerDisplay">25:00</span>
+                    <span class="text-xs text-slate-500 mt-2" id="timerSubtext">اضغط ابدأ للتشغيل</span>
+                </div>
+            </div>
+
+            <!-- Timer controls -->
+            <div class="flex items-center justify-center gap-3 sm:gap-4 flex-wrap">
+                <button id="startPauseBtn"
+                        class="btn-neon font-bold text-sm px-6 py-3 rounded-xl text-white
+                               bg-gradient-to-r from-purple-600 to-sky-500 border border-purple-400/30">
+                    ▶ ابدأ
+                </button>
+                <button id="resetBtn"
+                        class="btn-neon font-bold text-sm px-6 py-3 rounded-xl text-slate-300
+                               bg-slate-800/60 border border-slate-600/40 hover:text-white">
+                    ↻ إعادة
+                </button>
+                <button id="skipBtn"
+                        class="btn-neon font-bold text-sm px-6 py-3 rounded-xl text-slate-300
+                               bg-slate-800/60 border border-slate-600/40 hover:text-white">
+                    ⏭ تخطّي
+                </button>
+            </div>
+        </section>
+
+        <!-- ============ Post-Session Diary Entry Section ============ -->
+        <section class="glass-card rounded-2xl p-5 sm:p-6 mb-6" id="diaryEntrySection">
+            <h2 class="font-display text-sm font-bold text-purple-300 tracking-widest uppercase mb-4">
+                ✦ سجل المعرفة — ماذا تعلمت؟
+            </h2>
+
+            <!-- Subject selector -->
+            <select id="subjectSelect"
+                    class="neon-input w-full bg-slate-900/70 border border-purple-500/30 rounded-xl px-4 py-3 text-slate-100 text-sm transition-all mb-3">
+                <option value="">بدون مادة محددة</option>
+            </select>
+
+            <!-- Topic input -->
+            <input
+                type="text"
+                id="topicInput"
+                placeholder="موضوع الجلسة (مثال: الفصل 3 — الشبكات العصبية)"
+                maxlength="100"
+                class="neon-input w-full bg-slate-900/70 border border-purple-500/30 rounded-xl px-4 py-3 text-slate-100 placeholder-slate-500 text-sm transition-all mb-3"
+                autocomplete="off"
+            />
+
+            <!-- Summary textarea -->
+            <textarea
+                id="summaryInput"
+                placeholder="اكتب ملخصاً لما تعلمته في هذه الجلسة... (كلما كان الملخص أعمق، كانت النصيحة أفضل)"
+                maxlength="1000"
+                rows="4"
+                class="neon-input w-full bg-slate-900/70 border border-purple-500/30 rounded-xl px-4 py-3 text-slate-100 placeholder-slate-500 text-sm transition-all mb-3 resize-none"
+            ></textarea>
+
+            <!-- Action buttons -->
+            <div class="flex flex-col sm:flex-row gap-3">
+                <button id="saveDiaryBtn"
+                        class="btn-neon font-bold text-sm px-6 py-3 rounded-xl text-white
+                               bg-gradient-to-r from-purple-600 to-sky-500 border border-purple-400/30 flex-1">
+                    💾 حفظ في السجل
+                </button>
+                <button id="analyzeBtn"
+                        class="btn-neon font-bold text-sm px-6 py-3 rounded-xl text-sky-200
+                               bg-sky-900/40 border border-sky-500/30 flex-1">
+                    🧠 تحليل بالذكاء الاصطناعي
+                </button>
+            </div>
+
+            <!-- AI Analysis Result -->
+            <div id="aiResult" class="hidden mt-4"></div>
+        </section>
+
+        <!-- ============ Knowledge Diary (History) ============ -->
+        <section class="glass-card rounded-2xl p-5 sm:p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="font-display text-sm font-bold text-purple-300 tracking-widest uppercase">
+                    📜 يوميات المذاكرة
+                </h2>
+                <button id="clearAllBtn" class="text-xs text-slate-400 hover:text-pink-400 transition-colors font-medium hidden">
+                    مسح الكل
+                </button>
+            </div>
+
+            <!-- Diary list -->
+            <div id="diaryList" class="space-y-3"></div>
+
+            <!-- Empty state -->
+            <div id="emptyState" class="flex flex-col items-center justify-center py-12">
+                <svg class="w-16 h-16 text-purple-500/60 mb-4" style="filter: drop-shadow(0 0 15px rgba(168,85,247,0.4))" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                </svg>
+                <p class="text-slate-500 text-sm font-medium">لا توجد يوميات بعد. ابدأ أول جلسة مذاكرة!</p>
+                <p class="text-slate-600 text-xs mt-1 font-mono">// في انتظار المعرفة...</p>
+            </div>
+        </section>
+
+        <!-- ============ Backup / Restore ============ -->
+        <section class="glass-card rounded-2xl p-5 sm:p-6 mb-6">
+            <h2 class="font-display text-sm font-bold text-purple-300 tracking-widest uppercase mb-3">
+                💾 نسخة احتياطية
+            </h2>
+            <p class="text-xs text-slate-500 mb-3">بياناتك بتتحفظ سحابيًا تلقائي على حسابك. لو عندك ملف نسخة احتياطية قديم، تقدر تسترجعه هنا:</p>
+            <div class="flex gap-2 flex-wrap">
+                <label class="screen-back-btn cursor-pointer">
+                    ⬆️ استيراد نسخة احتياطية
+                    <input type="file" id="importBackupInput" accept="application/json" class="hidden" />
+                </label>
+            </div>
+        </section>
+
+        <!-- ============ Footer ============ -->
+        <footer class="text-center mt-8">
+            <p class="text-xs text-slate-500 font-mono">
+                <span class="text-purple-400">◆</span> البيانات محفوظة محلياً عبر localStorage
+                <span class="text-purple-400">◆</span> مدعوم بالذكاء الاصطناعي
+            </p>
+        </footer>
+    </div>
+
+    <!-- ================================================
+         Screen: AI Chat
+         ================================================ -->
+    <div class="app-screen" id="aiChatScreen">
+        <div class="app-screen-header">
+            <button class="screen-back-btn" data-close="aiChatScreen">→ رجوع</button>
+            <h2 class="font-display text-sm font-bold text-purple-300">💬 مساعد المذاكرة الذكي</h2>
+            <button id="exportChatPdfBtn" class="screen-back-btn" style="margin-right:auto;">📄 تصدير PDF</button>
+        </div>
+        <div class="app-screen-body" id="chatMessagesArea"></div>
+        <div style="padding: 0.75rem 1rem 1rem; border-top: 1px solid rgba(168,85,247,0.15); flex-shrink:0;">
+            <div id="chatAttachPreview" class="flex flex-wrap gap-2 mb-2"></div>
+            <div class="flex items-center gap-2">
+                <label class="screen-back-btn cursor-pointer" title="إرفاق صور/فيديو/ملفات (حتى 20 ملف، 50 ميجا كحد أقصى)">
+                    📎
+                    <input type="file" id="chatFileInput" accept="image/*,video/*" multiple class="hidden" />
+                </label>
+                <input type="text" id="chatMsgInput" placeholder="اسأل عن أي درس أو مادة..."
+                       class="neon-input flex-1 bg-slate-900/70 border border-purple-500/30 rounded-xl px-4 py-2.5 text-slate-100 placeholder-slate-500 text-sm" />
+                <button id="chatSendBtn"
+                        class="btn-neon font-bold text-sm px-4 py-2.5 rounded-xl text-white bg-gradient-to-r from-purple-600 to-sky-500 border border-purple-400/30">
+                    ➤
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================
+         Screen: Tasks
+         ================================================ -->
+    <div class="app-screen" id="tasksScreen">
+        <div class="app-screen-header">
+            <button class="screen-back-btn" data-close="tasksScreen">→ رجوع</button>
+            <h2 class="font-display text-sm font-bold text-purple-300">✅ المهام اليومية</h2>
+            <span id="streakBadge" style="margin-right:auto;" class="text-xs font-bold text-amber-400"></span>
+        </div>
+        <div class="app-screen-body">
+            <div class="glass-card rounded-2xl p-4 mb-4">
+                <input type="text" id="newTaskText" placeholder="اسم المهمة (مثال: حل تمارين الوحدة الثالثة)"
+                       class="neon-input w-full bg-slate-900/70 border border-purple-500/30 rounded-xl px-4 py-2.5 text-slate-100 placeholder-slate-500 text-sm mb-2" />
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <select id="newTaskPriority" class="neon-input bg-slate-900/70 border border-purple-500/30 rounded-xl px-3 py-2.5 text-slate-100 text-sm">
+                        <option value="high">🔴 أولوية عالية</option>
+                        <option value="medium" selected>🟡 أولوية متوسطة</option>
+                        <option value="low">🟢 أولوية منخفضة</option>
+                    </select>
+                    <input type="datetime-local" id="newTaskDue"
+                           class="neon-input bg-slate-900/70 border border-purple-500/30 rounded-xl px-3 py-2.5 text-slate-100 text-sm flex-1" />
+                    <button id="addTaskBtn"
+                            class="btn-neon font-bold text-sm px-5 py-2.5 rounded-xl text-white bg-gradient-to-r from-purple-600 to-sky-500 border border-purple-400/30 whitespace-nowrap">
+                        إضافة
+                    </button>
+                </div>
+            </div>
+
+            <h3 class="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">المهام الحالية</h3>
+            <div id="activeTasksList" class="space-y-2 mb-6"></div>
+            <div id="activeTasksEmpty" class="text-center py-4 text-slate-500 text-sm">مفيش مهام دلوقتي — ضيف مهمة جديدة! ✨</div>
+
+            <h3 class="text-xs font-bold text-pink-400 uppercase tracking-widest mb-2">⏰ المهام المؤجلة</h3>
+            <div id="postponedTasksList" class="space-y-2"></div>
+            <div id="postponedTasksEmpty" class="text-center py-4 text-slate-500 text-sm">مفيش مهام مؤجلة، أنت ماشي كويس 👏</div>
+        </div>
+    </div>
+
+    <!-- ================================================
+         Screen: Weekly Schedule
+         ================================================ -->
+    <div class="app-screen" id="scheduleScreen">
+        <div class="app-screen-header">
+            <button class="screen-back-btn" data-close="scheduleScreen">→ رجوع</button>
+            <h2 class="font-display text-sm font-bold text-purple-300">📅 جدول الحصص</h2>
+        </div>
+        <div class="app-screen-body">
+            <div class="glass-card rounded-2xl p-4 mb-4">
+                <p class="text-xs text-slate-400 mb-2">تقدر ترفع صورة أو PDF لجدولك الأسبوعي بدل ما تكتبه يدويًا:</p>
+                <div class="flex items-center gap-2">
+                    <label class="btn-neon font-bold text-xs px-4 py-2 rounded-xl text-white bg-gradient-to-r from-purple-600 to-sky-500 border border-purple-400/30 cursor-pointer whitespace-nowrap">
+                        📤 رفع ملف الجدول
+                        <input type="file" id="scheduleFileInput" accept="application/pdf,image/*" class="hidden" />
+                    </label>
+                    <button id="viewScheduleFileBtn" class="screen-back-btn hidden">👁️ عرض الملف المرفوع</button>
+                    <button id="removeScheduleFileBtn" class="screen-back-btn hidden text-pink-300">🗑️ حذف الملف</button>
+                </div>
+            </div>
+
+            <button id="exportSchedulePdfBtn" class="hidden btn-neon font-bold text-sm px-5 py-2.5 rounded-xl text-white bg-gradient-to-r from-purple-600 to-sky-500 border border-purple-400/30 w-full mb-4">
+                📄 تحميل الجدول PDF
+            </button>
+
+            <div id="scheduleGrid" class="space-y-4"></div>
+        </div>
+    </div>
+
+    <!-- ================================================
+         Screen: Flashcards
+         ================================================ -->
+    <div class="app-screen" id="flashcardsScreen">
+        <div class="app-screen-header">
+            <button class="screen-back-btn" data-close="flashcardsScreen">→ رجوع</button>
+            <h2 class="font-display text-sm font-bold text-purple-300">🗂️ البطاقات التعليمية</h2>
+        </div>
+        <div class="app-screen-body">
+            <div class="glass-card rounded-2xl p-4 mb-4">
+                <input type="text" id="newFlashTerm" placeholder="الكلمة / المصطلح"
+                       class="neon-input w-full bg-slate-900/70 border border-purple-500/30 rounded-xl px-4 py-2.5 text-slate-100 placeholder-slate-500 text-sm mb-2" />
+                <textarea id="newFlashDef" placeholder="المعنى / التعريف" rows="2"
+                          class="neon-input w-full bg-slate-900/70 border border-purple-500/30 rounded-xl px-4 py-2.5 text-slate-100 placeholder-slate-500 text-sm mb-2 resize-none"></textarea>
+                <button id="addFlashcardBtn"
+                        class="btn-neon font-bold text-sm px-5 py-2.5 rounded-xl text-white bg-gradient-to-r from-purple-600 to-sky-500 border border-purple-400/30 w-full">
+                    ➕ إضافة بطاقة
+                </button>
+            </div>
+
+            <div class="glass-card rounded-2xl p-4 mb-4">
+                <p class="text-xs text-slate-400 mb-2">ارفع صور أو ملف PDF للدرس (حتى 20 صورة، 50 ميجا كحد أقصى)، وخلي الذكاء الاصطناعي يستخرجلك بطاقات مراجعة منه:</p>
+                <div class="flex items-center gap-2 flex-wrap mb-2">
+                    <label class="screen-back-btn cursor-pointer">
+                        📎 إرفاق صور/PDF الدرس
+                        <input type="file" id="lessonFileInput" accept="image/*,application/pdf" multiple class="hidden" />
+                    </label>
+                    <div class="flex items-center gap-1.5">
+                        <span class="text-[11px] text-slate-400">عدد البطاقات:</span>
+                        <input type="number" id="flashCountInput" value="20" min="1" max="50"
+                               class="w-14 bg-slate-900/70 border border-purple-500/30 rounded-lg px-2 py-1 text-[11px] text-slate-100 text-center" />
+                    </div>
+                </div>
+                <div id="lessonFilesPreview" class="flex flex-wrap gap-1.5 mb-2"></div>
+                <button id="generateFlashcardsBtn" disabled
+                        class="font-bold text-xs px-4 py-2.5 rounded-xl text-white bg-gradient-to-r from-purple-600 to-sky-500 border border-purple-400/30 opacity-40 pointer-events-none transition-opacity w-full flex items-center justify-center gap-2">
+                    <span id="generateFlashcardsBtnText">✨ توليد أسئلة بالذكاء الاصطناعي</span>
+                </button>
+            </div>
+
+            <div id="aiFlashSection" class="hidden mb-2">
+                <h3 class="text-xs font-bold text-sky-300 uppercase tracking-widest mb-1">🤖 بطاقات الذكاء الاصطناعي</h3>
+                <div id="flashcardsGridAi" class="flash-carousel"></div>
+            </div>
+            <div id="manualFlashSection" class="hidden">
+                <h3 class="text-xs font-bold text-purple-300 uppercase tracking-widest mb-1">✍️ بطاقاتك الخاصة</h3>
+                <div id="flashcardsGridManual" class="flash-carousel"></div>
+            </div>
+            <div id="flashcardsEmpty" class="text-center py-6 text-slate-500 text-sm">لسه مفيش بطاقات — ضيف أول بطاقة! 🗂️</div>
+        </div>
+    </div>
+
+    <!-- ================================================
+         Screen: Quiz
+         ================================================ -->
+    <div class="app-screen" id="quizScreen">
+        <div class="app-screen-header">
+            <button class="screen-back-btn" data-close="quizScreen">→ رجوع</button>
+            <h2 class="font-display text-sm font-bold text-purple-300">🧠 اختبر نفسك</h2>
+        </div>
+        <div class="app-screen-body" id="quizBody"></div>
+    </div>
+
+    <!-- ================================================
+         Screen: Stats
+         ================================================ -->
+    <div class="app-screen" id="statsScreen">
+        <div class="app-screen-header">
+            <button class="screen-back-btn" data-close="statsScreen">→ رجوع</button>
+            <h2 class="font-display text-sm font-bold text-purple-300">📊 إحصائياتك</h2>
+        </div>
+        <div class="app-screen-body">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                <div class="glass-card rounded-xl p-3 text-center">
+                    <div class="text-2xl font-display font-bold text-amber-400" id="statStreakBig">0</div>
+                    <div class="text-[10px] text-slate-500 mt-1">🔥 يوم متتالي</div>
+                </div>
+                <div class="glass-card rounded-xl p-3 text-center">
+                    <div class="text-2xl font-display font-bold text-purple-300" id="statTotalSessions">0</div>
+                    <div class="text-[10px] text-slate-500 mt-1">جلسة مذاكرة</div>
+                </div>
+                <div class="glass-card rounded-xl p-3 text-center">
+                    <div class="text-2xl font-display font-bold text-sky-300" id="statTotalHours">0.0</div>
+                    <div class="text-[10px] text-slate-500 mt-1">ساعة مذاكرة</div>
+                </div>
+                <div class="glass-card rounded-xl p-3 text-center">
+                    <div class="text-2xl font-display font-bold text-pink-300" id="statTotalTasks">0</div>
+                    <div class="text-[10px] text-slate-500 mt-1">مهمة مُنجزة</div>
+                </div>
+            </div>
+
+            <div class="glass-card rounded-2xl p-4 mb-4">
+                <h3 class="text-xs font-bold text-purple-300 uppercase tracking-widest mb-3">آخر 7 أيام</h3>
+                <div id="statsWeeklyChart" class="flex items-end justify-between gap-2" style="height: 110px;"></div>
+            </div>
+
+            <div class="glass-card rounded-2xl p-4">
+                <h3 class="text-xs font-bold text-purple-300 uppercase tracking-widest mb-3">التقدم حسب المادة</h3>
+                <div id="statsSubjectsBars" class="space-y-3"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================
+         JavaScript — App Logic (Vanilla JS)
+         ================================================ -->
+    <script>
+        'use strict';
+
+        /* =====================================================
+           Firebase — Google Auth + Cloud Sync
+           ===================================================== */
+        const firebaseConfig = {
+            apiKey: "AIzaSyDkRj_-2r2i60JflePeodk7pg0vvVsw67Q",
+            authDomain: "study-flow-tracker.firebaseapp.com",
+            projectId: "study-flow-tracker",
+            storageBucket: "study-flow-tracker.firebasestorage.app",
+            messagingSenderId: "1088981680555",
+            appId: "1:1088981680555:web:3a2eb7effefd3a585152ee"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const fbAuth = firebase.auth();
+        const fbDb = firebase.firestore();
+        let currentUser = null;
+        let cloudSyncTimer = null;
+        let isApplyingCloudData = false;
+        let hasPulledThisSession = false;
+
+        const authGateScreen = document.getElementById('authGateScreen');
+        const authGateLoading = document.getElementById('authGateLoading');
+        const authGateContent = document.getElementById('authGateContent');
+        const mainAppContent = document.getElementById('mainAppContent');
+        const authGateError  = document.getElementById('authGateError');
+        const googleSignInBtn = document.getElementById('googleSignInBtn');
+        const userProfileChip = document.getElementById('userProfileChip');
+        const userAvatar     = document.getElementById('userAvatar');
+        const userName       = document.getElementById('userName');
+        const signOutBtn     = document.getElementById('signOutBtn');
+        const syncStatus     = document.getElementById('syncStatus');
+        let authCheckDone = false;
+
+        // Explicit LOCAL persistence — keeps the session alive across
+        // closing/reopening the browser. This (plus switching from a popup
+        // to a redirect flow below) is what fixes sessions not surviving
+        // after the first login + browser close.
+        fbAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
+
+        googleSignInBtn.addEventListener('click', () => {
+            authGateError.textContent = '';
+            const provider = new firebase.auth.GoogleAuthProvider();
+            // Always show the account picker — this is also what makes
+            // "خروج" (sign out) meaningful: without this, Google silently
+            // re-signs you into the same account with no way to pick another.
+            provider.setCustomParameters({ prompt: 'select_account' });
+            // signInWithRedirect is far more reliable than signInWithPopup on
+            // mobile browsers (popups get silently blocked/closed on many
+            // Android browsers, which is what caused login to break after
+            // the first session).
+            fbAuth.signInWithRedirect(provider).catch(err => {
+                authGateError.textContent = '⚠ تعذّر تسجيل الدخول: ' + err.message;
+            });
+        });
+
+        signOutBtn.addEventListener('click', () => {
+            fbAuth.signOut();
+        });
+
+        // onAuthStateChanged is the single source of truth for auth state —
+        // it fires after getRedirectResult() resolves internally too, so we
+        // don't need a separate handler for the redirect result (having both
+        // was causing a race that could leave the gate stuck on some devices).
+        fbAuth.onAuthStateChanged(async (user) => {
+            currentUser = user;
+            authCheckDone = true;
+            authGateLoading.style.display = 'none';
+
+            if (user) {
+                authGateScreen.style.display = 'none';
+                mainAppContent.style.display = 'block';
+                userProfileChip.classList.remove('hidden');
+                userAvatar.src = user.photoURL || '';
+                userName.textContent = user.displayName || user.email || '';
+                if (!hasPulledThisSession) {
+                    hasPulledThisSession = true;
+                    await pullFromCloud();
+                }
+            } else {
+                authGateScreen.style.display = 'flex';
+                authGateContent.style.display = 'block';
+                mainAppContent.style.display = 'none';
+                userProfileChip.classList.add('hidden');
+                syncStatus.textContent = '';
+                hasPulledThisSession = false;
+            }
+        });
+
+        // Safety net: if Firebase takes unusually long to resolve the auth
+        // state (slow network, etc.), stop showing "just a spinner forever"
+        // and reveal the sign-in button after 6 seconds regardless.
+        setTimeout(() => {
+            if (!authCheckDone) {
+                authGateLoading.style.display = 'none';
+                authGateContent.style.display = 'block';
+            }
+        }, 6000);
+
+        async function pullFromCloud() {
+            try {
+                syncStatus.textContent = '☁️ بيزامن...';
+                const doc = await fbDb.collection('users').doc(currentUser.uid).get();
+                if (doc.exists) {
+                    const cloudData = doc.data();
+                    isApplyingCloudData = true;
+                    Object.entries(cloudData).forEach(([key, val]) => {
+                        if (ALL_BACKUP_KEYS.includes(key) && typeof val === 'string') {
+                            localStorage.setItem(key, val);
+                        }
+                    });
+                    isApplyingCloudData = false;
+                    initializeAppUI(); // refresh the UI in place — no page reload needed
+                    syncStatus.textContent = '✅ اتزامن';
+                    setTimeout(() => { syncStatus.textContent = ''; }, 2000);
+                } else {
+                    // أول مرة يدخل بالحساب ده — نرفع بياناته المحلية الحالية
+                    syncToCloud();
+                    syncStatus.textContent = '✅ اتزامن';
+                    setTimeout(() => { syncStatus.textContent = ''; }, 2000);
+                }
+            } catch (err) {
+                syncStatus.textContent = '⚠ فشل المزامنة';
+                console.error('Cloud pull error:', err);
+            }
+        }
+
+        function scheduleCloudSync() {
+            if (!currentUser || isApplyingCloudData) return;
+            clearTimeout(cloudSyncTimer);
+            syncStatus.textContent = '☁️ بيحفظ...';
+            cloudSyncTimer = setTimeout(syncToCloud, 1500);
+        }
+
+        async function syncToCloud() {
+            if (!currentUser) return;
+            try {
+                const backup = {};
+                ALL_BACKUP_KEYS.forEach(key => {
+                    const val = localStorage.getItem(key);
+                    if (val !== null) backup[key] = val;
+                });
+                await fbDb.collection('users').doc(currentUser.uid).set(backup);
+                syncStatus.textContent = '✅ محفوظ سحابيًا';
+                setTimeout(() => { syncStatus.textContent = ''; }, 2000);
+            } catch (err) {
+                syncStatus.textContent = '⚠ فشل الحفظ السحابي';
+                console.error('Cloud sync error:', err);
+            }
+        }
+
+
+        /* =====================================================
+           مساعد المذاكرة الذكي — Study Flow Tracker
+           ===================================================== */
+
+        // ---------- DOM References ----------
+        const timerDisplay   = document.getElementById('timerDisplay');
+        const timerSubtext   = document.getElementById('timerSubtext');
+        const timerRing      = document.getElementById('timerRing');
+        const sessionLabel   = document.getElementById('sessionLabel');
+        const sessionDot     = document.getElementById('sessionDot');
+        const timerCard      = document.getElementById('timerCard');
+        const startPauseBtn  = document.getElementById('startPauseBtn');
+        const resetBtn       = document.getElementById('resetPauseBtn') || document.getElementById('resetBtn');
+        const skipBtn        = document.getElementById('skipBtn');
+        const topicInput     = document.getElementById('topicInput');
+        const summaryInput   = document.getElementById('summaryInput');
+        const saveDiaryBtn   = document.getElementById('saveDiaryBtn');
+        const analyzeBtn     = document.getElementById('analyzeBtn');
+        const aiResult       = document.getElementById('aiResult');
+        const diaryList      = document.getElementById('diaryList');
+        const emptyState     = document.getElementById('emptyState');
+        const clearAllBtn    = document.getElementById('clearAllBtn');
+        const statSessions   = document.getElementById('statSessions');
+        const statHours      = document.getElementById('statHours');
+        const statEntries    = document.getElementById('statEntries');
+        const subjectSelect  = document.getElementById('subjectSelect');
+        const subjectsList   = document.getElementById('subjectsList');
+        const subjectsEmptyState = document.getElementById('subjectsEmptyState');
+        const addSubjectToggleBtn = document.getElementById('addSubjectToggleBtn');
+        const addSubjectForm = document.getElementById('addSubjectForm');
+        const newSubjectName = document.getElementById('newSubjectName');
+        const newSubjectExamDate = document.getElementById('newSubjectExamDate');
+        const confirmAddSubjectBtn = document.getElementById('confirmAddSubjectBtn');
+        const mistakeSubjectSelect = document.getElementById('mistakeSubjectSelect');
+        const mistakeText    = document.getElementById('mistakeText');
+        const addMistakeBtn  = document.getElementById('addMistakeBtn');
+        const mistakesList   = document.getElementById('mistakesList');
+        const mistakesEmptyState = document.getElementById('mistakesEmptyState');
+        const reviewsSection = document.getElementById('reviewsSection');
+        const reviewsList    = document.getElementById('reviewsList');
+        const weeklyChart    = document.getElementById('weeklyChart');
+
+        // ---- New screens DOM refs ----
+        const chatMessagesArea = document.getElementById('chatMessagesArea');
+        const chatMsgInput   = document.getElementById('chatMsgInput');
+        const chatSendBtn    = document.getElementById('chatSendBtn');
+        const chatFileInput  = document.getElementById('chatFileInput');
+        const chatAttachPreview = document.getElementById('chatAttachPreview');
+        const exportChatPdfBtn = document.getElementById('exportChatPdfBtn');
+
+        const streakBadge    = document.getElementById('streakBadge');
+        const newTaskText    = document.getElementById('newTaskText');
+        const newTaskPriority = document.getElementById('newTaskPriority');
+        const newTaskDue     = document.getElementById('newTaskDue');
+        const addTaskBtn     = document.getElementById('addTaskBtn');
+        const activeTasksList = document.getElementById('activeTasksList');
+        const activeTasksEmpty = document.getElementById('activeTasksEmpty');
+        const postponedTasksList = document.getElementById('postponedTasksList');
+        const postponedTasksEmpty = document.getElementById('postponedTasksEmpty');
+
+        const scheduleFileInput = document.getElementById('scheduleFileInput');
+        const viewScheduleFileBtn = document.getElementById('viewScheduleFileBtn');
+        const removeScheduleFileBtn = document.getElementById('removeScheduleFileBtn');
+        const exportSchedulePdfBtn = document.getElementById('exportSchedulePdfBtn');
+        const scheduleGrid   = document.getElementById('scheduleGrid');
+
+        const newFlashTerm   = document.getElementById('newFlashTerm');
+        const newFlashDef    = document.getElementById('newFlashDef');
+        const addFlashcardBtn = document.getElementById('addFlashcardBtn');
+        const flashcardsEmpty = document.getElementById('flashcardsEmpty');
+
+        // ---- Quiz / Stats / Backup / Sounds / AI flashcards ----
+        const quizBody       = document.getElementById('quizBody');
+        const statStreakBig  = document.getElementById('statStreakBig');
+        const statTotalSessions = document.getElementById('statTotalSessions');
+        const statTotalHours = document.getElementById('statTotalHours');
+        const statTotalTasks = document.getElementById('statTotalTasks');
+        const statsWeeklyChart = document.getElementById('statsWeeklyChart');
+        const statsSubjectsBars = document.getElementById('statsSubjectsBars');
+        const importBackupInput = document.getElementById('importBackupInput');
+        const lessonFileInput = document.getElementById('lessonFileInput');
+        const lessonFilesPreview = document.getElementById('lessonFilesPreview');
+        const flashCountInput = document.getElementById('flashCountInput');
+        const generateFlashcardsBtn = document.getElementById('generateFlashcardsBtn');
+        const generateFlashcardsBtnText = document.getElementById('generateFlashcardsBtnText');
+        const aiFlashSection = document.getElementById('aiFlashSection');
+        const manualFlashSection = document.getElementById('manualFlashSection');
+        const flashcardsGridAi = document.getElementById('flashcardsGridAi');
+        const flashcardsGridManual = document.getElementById('flashcardsGridManual');
+
+        // ---------- Constants ----------
+        const STORAGE_KEY    = 'study_flow_diary';
+        const STATS_KEY      = 'study_flow_stats';
+        const STATS_HISTORY_KEY = 'study_flow_stats_history';
+        const SUBJECTS_KEY   = 'study_flow_subjects';
+        const MISTAKES_KEY   = 'study_flow_mistakes';
+        const API_URL        = 'https://yazeed-ai-proxy.y9669210.workers.dev/';
+        const STUDY_DURATION  = 25 * 60;  // 25 minutes in seconds
+        const BREAK_DURATION  = 5 * 60;   // 5 minutes in seconds
+        const RING_CIRCUMFERENCE = 2 * Math.PI * 100; // ~628.318
+        const SUBJECT_COLORS = ['#a855f7', '#38bdf8', '#ec4899', '#34d399', '#f59e0b', '#f43f5e', '#818cf8'];
+
+        // ---------- Timer State ----------
+        let timerMode        = 'study';   // 'study' or 'break'
+        let timeLeft         = STUDY_DURATION;
+        let timerInterval    = null;
+        let isRunning        = false;
+        let completedSessions = 0;       // sessions completed in current cycle
+
+        // ---------- Data State ----------
+        let diary = [];
+        let dailyStats = { date: '', sessions: 0, focusSeconds: 0, entries: 0 };
+        let statsHistory = {}; // { 'YYYY-MM-DD': { sessions, focusSeconds } }
+        let subjects = [];     // { id, name, examDate, progress, color }
+        let mistakes = [];     // { id, subjectId, text, timestamp }
+
+        // ---- New feature state ----
+        const STUDY_CHAT_KEY = 'study_flow_ai_chat';
+        const TASKS_KEY       = 'study_flow_tasks';
+        const SCHEDULE_KEY    = 'study_flow_schedule';
+        const SCHEDULE_FILE_KEY = 'study_flow_schedule_file';
+        const FLASHCARDS_KEY  = 'study_flow_flashcards';
+        const MAX_ATTACHMENTS = 20;
+        const MAX_ATTACH_TOTAL_MB = 50;
+        const WEEK_DAYS = ['السبت', 'الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
+
+        let studyChat = [];       // { role: 'user'|'model', text, attachments: [{name,mimeType}] }
+        let pendingChatFiles = []; // [{file, base64, mimeType, name}]
+        let tasks = [];           // { id, text, priority, due, done, postponed, completedDate }
+        let schedule = {};        // { 'السبت': [{time,subject}], ... }
+        let flashcards = [];      // { id, term, definition }
+        let flippedCards = new Set();
+
+        // ---- Lesson attachment (for AI flashcard generation) ----
+        let lessonAttachments = []; // [{ base64, mimeType, name }]
+
+        /* =====================================================
+           localStorage — Data Persistence
+           ===================================================== */
+
+        /**
+         * Load diary entries from localStorage.
+         */
+        function loadDiary() {
+            try {
+                const data = localStorage.getItem(STORAGE_KEY);
+                return data ? JSON.parse(data) : [];
+            } catch (e) {
+                console.error('فشل تحميل اليوميات:', e);
+                return [];
+            }
+        }
+
+        /**
+         * Save diary entries to localStorage.
+         */
+        function saveDiary() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(diary));
+            } catch (e) {
+                console.error('فشل حفظ اليوميات:', e);
+            }
+        }
+
+        /**
+         * Load daily stats; reset if the date has changed.
+         */
+        function loadStats() {
+            try {
+                const data = localStorage.getItem(STATS_KEY);
+                if (data) {
+                    const parsed = JSON.parse(data);
+                    const today = new Date().toISOString().split('T')[0];
+                    if (parsed.date !== today) {
+                        // New day — reset stats
+                        return { date: today, sessions: 0, focusSeconds: 0, entries: 0 };
+                    }
+                    return parsed;
+                }
+            } catch (e) {
+                console.error('فشل تحميل الإحصائيات:', e);
+            }
+            return { date: new Date().toISOString().split('T')[0], sessions: 0, focusSeconds: 0, entries: 0 };
+        }
+
+        /**
+         * Save daily stats to localStorage.
+         */
+        function saveStats() {
+            try {
+                localStorage.setItem(STATS_KEY, JSON.stringify(dailyStats));
+                // Also mirror today's numbers into the history log for the weekly chart
+                statsHistory[dailyStats.date] = {
+                    sessions: dailyStats.sessions,
+                    focusSeconds: dailyStats.focusSeconds
+                };
+                localStorage.setItem(STATS_HISTORY_KEY, JSON.stringify(statsHistory));
+            } catch (e) {
+                console.error('فشل حفظ الإحصائيات:', e);
+            }
+        }
+
+        function loadStatsHistory() {
+            try {
+                const data = localStorage.getItem(STATS_HISTORY_KEY);
+                return data ? JSON.parse(data) : {};
+            } catch (e) {
+                return {};
+            }
+        }
+
+        function loadSubjects() {
+            try {
+                const data = localStorage.getItem(SUBJECTS_KEY);
+                return data ? JSON.parse(data) : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function saveSubjects() {
+            try {
+                localStorage.setItem(SUBJECTS_KEY, JSON.stringify(subjects));
+            } catch (e) {
+                console.error('فشل حفظ المواد:', e);
+            }
+        }
+
+        function loadMistakes() {
+            try {
+                const data = localStorage.getItem(MISTAKES_KEY);
+                return data ? JSON.parse(data) : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function saveMistakes() {
+            try {
+                localStorage.setItem(MISTAKES_KEY, JSON.stringify(mistakes));
+            } catch (e) {
+                console.error('فشل حفظ الأخطاء:', e);
+            }
+        }
+
+        /* =====================================================
+           Pomodoro Timer Logic
+           ===================================================== */
+
+        /**
+         * Format seconds into MM:SS display string.
+         */
+        function formatTime(seconds) {
+            const m = Math.floor(seconds / 60);
+            const s = seconds % 60;
+            return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        }
+
+        /**
+         * Update the timer display text and ring progress.
+         */
+        function updateTimerDisplay() {
+            timerDisplay.textContent = formatTime(timeLeft);
+
+            // Update ring progress
+            const totalDuration = timerMode === 'study' ? STUDY_DURATION : BREAK_DURATION;
+            const progress = 1 - (timeLeft / totalDuration);
+            const offset = RING_CIRCUMFERENCE * progress;
+            timerRing.style.strokeDashoffset = offset;
+        }
+
+        /**
+         * Switch timer mode between study and break.
+         */
+        function switchMode() {
+            if (timerMode === 'study') {
+                // Study session finished
+                completedSessions++;
+                dailyStats.sessions++;
+                dailyStats.focusSeconds += STUDY_DURATION;
+                saveStats();
+                updateStats();
+
+                // Auto-fill topic prompt
+                timerSubtext.textContent = 'انتهت الجلسة! اكتب ملخصك بالأسفل ↑';
+
+                // Switch to break
+                timerMode = 'break';
+                timeLeft = BREAK_DURATION;
+                sessionLabel.textContent = 'استراحة';
+                sessionDot.classList.remove('bg-purple-400');
+                sessionDot.classList.add('bg-emerald-400');
+                timerCard.classList.remove('session-study-glow');
+                timerCard.classList.add('session-break-glow');
+                timerRing.setAttribute('stroke', 'url(#timerGradient');
+            } else {
+                // Break finished
+                timerMode = 'study';
+                timeLeft = STUDY_DURATION;
+                sessionLabel.textContent = 'جلسة مذاكرة';
+                sessionDot.classList.remove('bg-emerald-400');
+                sessionDot.classList.add('bg-purple-400');
+                timerCard.classList.remove('session-break-glow');
+                timerCard.classList.add('session-study-glow');
+                timerSubtext.textContent = 'اضغط ابدأ للتشغيل';
+            }
+
+            updateTimerDisplay();
+        }
+
+        /**
+         * Start or pause the timer.
+         */
+        function startPauseTimer() {
+            if (isRunning) {
+                // Pause
+                clearInterval(timerInterval);
+                isRunning = false;
+                startPauseBtn.textContent = '▶ متابعة';
+                timerSubtext.textContent = 'متوقفة مؤقتاً';
+            } else {
+                // Start
+                isRunning = true;
+                startPauseBtn.textContent = '⏸ إيقاف';
+                timerSubtext.textContent = timerMode === 'study' ? 'ركز... وقت المذاكرة' : 'استرح... استرخ قليلاً';
+
+                timerInterval = setInterval(() => {
+                    timeLeft--;
+                    updateTimerDisplay();
+
+                    if (timeLeft <= 0) {
+                        clearInterval(timerInterval);
+                        isRunning = false;
+                        startPauseBtn.textContent = '▶ ابدأ';
+                        // Play a subtle notification sound via Web Audio API
+                        playBeep();
+                        // Auto-switch mode
+                        switchMode();
+                    }
+                }, 1000);
+            }
+        }
+
+        /**
+         * Reset the timer to the beginning of the current mode.
+         */
+        function resetTimer() {
+            clearInterval(timerInterval);
+            isRunning = false;
+            timeLeft = timerMode === 'study' ? STUDY_DURATION : BREAK_DURATION;
+            startPauseBtn.textContent = '▶ ابدأ';
+            timerSubtext.textContent = 'اضغط ابدأ للتشغيل';
+            updateTimerDisplay();
+        }
+
+        /**
+         * Skip the current session/break immediately.
+         */
+        function skipSession() {
+            clearInterval(timerInterval);
+            isRunning = false;
+            startPauseBtn.textContent = '▶ ابدأ';
+            switchMode();
+        }
+
+        /**
+         * Play a short beep using the Web Audio API (no external file needed).
+         */
+        function playBeep() {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = ctx.createOscillator();
+                const gainNode = ctx.createGain();
+                oscillator.connect(gainNode);
+                gainNode.connect(ctx.destination);
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(880, ctx.currentTime);
+                gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+                oscillator.start(ctx.currentTime);
+                oscillator.stop(ctx.currentTime + 0.5);
+            } catch (e) {
+                // Audio not supported — silent fallback
+            }
+        }
+
+        /* =====================================================
+           Knowledge Diary — CRUD Operations
+           ===================================================== */
+
+        /**
+         * Generate a unique ID.
+         */
+        function generateId() {
+            return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        }
+
+        /**
+         * Show a small temporary toast notification at the bottom of the screen.
+         */
+        let toastTimer = null;
+        function showToast(msg) {
+            const el = document.getElementById('appToast');
+            el.textContent = msg;
+            el.style.opacity = '1';
+            el.style.transform = 'translateX(-50%) translateY(0)';
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                el.style.opacity = '0';
+                el.style.transform = 'translateX(-50%) translateY(20px)';
+            }, 3200);
+        }
+
+        /**
+         * Escape HTML to prevent XSS.
+         */
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        /**
+         * Format a timestamp into a readable Arabic date string.
+         */
+        function formatDate(timestamp) {
+            const date = new Date(timestamp);
+            const opts = {
+                year: 'numeric', month: 'long', day: 'numeric',
+                hour: '2-digit', minute: '2-digit', hour12: true
+            };
+            return date.toLocaleDateString('ar-EG', opts);
+        }
+
+        /**
+         * Save a new diary entry.
+         */
+        function saveDiaryEntry() {
+            const topic = topicInput.value.trim();
+            const summary = summaryInput.value.trim();
+
+            if (!summary) {
+                summaryInput.focus();
+                summaryInput.classList.add('border-pink-500');
+                setTimeout(() => summaryInput.classList.remove('border-pink-500'), 1500);
+                return;
+            }
+
+            const entry = {
+                id: generateId(),
+                subjectId: subjectSelect.value || null,
+                topic: topic || 'جلسة عامة',
+                summary: summary,
+                aiAdvice: null,
+                reviews: scheduleReviews(),
+                timestamp: Date.now()
+            };
+
+            diary.unshift(entry);
+            saveDiary();
+
+            // Update daily stats
+            dailyStats.entries++;
+            saveStats();
+            updateStats();
+
+            // Clear inputs
+            topicInput.value = '';
+            summaryInput.value = '';
+            aiResult.classList.add('hidden');
+
+            renderDiary();
+
+            // Scroll to diary list
+            diaryList.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        /**
+         * Delete a diary entry by ID.
+         */
+        function deleteDiaryEntry(id) {
+            diary = diary.filter(e => e.id !== id);
+            saveDiary();
+            renderDiary();
+        }
+
+        /**
+         * Clear all diary entries with two-click confirmation.
+         */
+        function clearAllDiary() {
+            const btn = clearAllBtn;
+            if (btn.dataset.confirming === 'true') {
+                diary = [];
+                saveDiary();
+                renderDiary();
+                btn.dataset.confirming = 'false';
+            } else {
+                btn.dataset.confirming = 'true';
+                btn.textContent = '⚠ اضغط مرة أخرى للتأكيد';
+                btn.classList.add('text-pink-400', 'font-bold');
+                setTimeout(() => {
+                    if (btn.dataset.confirming === 'true') {
+                        btn.dataset.confirming = 'false';
+                        btn.textContent = 'مسح الكل';
+                        btn.classList.remove('text-pink-400', 'font-bold');
+                    }
+                }, 3000);
+            }
+        }
+
+        /* =====================================================
+           AI Analysis — Proxy API Integration
+           ===================================================== */
+
+        /**
+         * Send the study summary to the AI proxy for analysis and advice.
+         * Uses the user's Cloudflare Worker as the API endpoint.
+         */
+        async function analyzeSummary() {
+            const summary = summaryInput.value.trim();
+
+            if (!summary) {
+                summaryInput.focus();
+                summaryInput.classList.add('border-pink-500');
+                setTimeout(() => summaryInput.classList.remove('border-pink-500'), 1500);
+                return;
+            }
+
+            // Show loading state
+            aiResult.classList.remove('hidden');
+            aiResult.innerHTML = `
+                <div class="fade-in-up bg-sky-900/30 border border-sky-500/30 rounded-xl p-4">
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-sky-300 text-sm font-bold">🧠 المحلل الذكي يعمل</span>
+                    </div>
+                    <div class="flex items-center justify-center py-2">
+                        <span class="ai-loading-dot"></span>
+                        <span class="ai-loading-dot"></span>
+                        <span class="ai-loading-dot"></span>
+                    </div>
+                </div>
+            `;
+            analyzeBtn.disabled = true;
+            analyzeBtn.textContent = '⏳ جاري التحليل...';
+
+            // Construct the prompt for the AI
+            const prompt = `أنت مستشار تعليمي خبير. قيّم ملخص الطالب التالي وقدم نصيحة موجزة ومفيدة لتحسين فهمه:
+
+موضوع الجلسة: ${topicInput.value.trim() || 'غير محدد'}
+ملخص الطالب: "${summary}"
+
+اكتب تقييمك ونصيحتك باللغة العربية في فقرة واحدة (3-5 أسطر)، ابدأ بـ "تقييم: " ثم "نصيحة: "`;
+
+            try {
+                const model = 'gemini-3.1-flash-lite';
+                const response = await fetch(`${API_URL}?model=${model}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [
+                            { role: 'user', parts: [{ text: prompt }] }
+                        ],
+                        systemInstruction: {
+                            parts: [{ text: 'أنت مستشار تعليمي عربي خبير. تقدم نصائح موجزة ومفيدة للطلاب.' }]
+                        }
+                    })
+                });
+
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                const data = await response.json();
+
+                // استخراج نص الرد بصيغة Gemini
+                let advice = '';
+                const candidate = data.candidates && data.candidates[0];
+                if (candidate && candidate.content && candidate.content.parts) {
+                    advice = candidate.content.parts.map(p => p.text || '').join('');
+                } else if (data.error) {
+                    throw new Error(data.error.message || 'API error');
+                } else {
+                    advice = JSON.stringify(data);
+                }
+
+                // Display the AI advice
+                aiResult.innerHTML = `
+                    <div class="fade-in-up bg-gradient-to-br from-purple-900/30 to-sky-900/30 border border-sky-500/30 rounded-xl p-4">
+                        <div class="flex items-center gap-2 mb-3">
+                            <span class="text-sky-300 text-sm font-bold">🧠 تحليل الذكاء الاصطناعي</span>
+                        </div>
+                        <p class="text-slate-200 text-sm leading-relaxed whitespace-pre-wrap">${escapeHtml(advice)}</p>
+                        <button id="saveWithAdviceBtn"
+                                class="mt-3 text-xs text-sky-300 hover:text-sky-100 font-medium transition-colors">
+                            💾 حفظ الملخص مع هذه النصيحة
+                        </button>
+                    </div>
+                `;
+
+                // Attach handler to "save with advice" button
+                document.getElementById('saveWithAdviceBtn').addEventListener('click', () => {
+                    saveDiaryEntryWithAdvice(advice);
+                });
+
+            } catch (error) {
+                console.error('خطأ في التحليل:', error);
+                aiResult.innerHTML = `
+                    <div class="fade-in-up bg-pink-900/20 border border-pink-500/30 rounded-xl p-4">
+                        <p class="text-pink-300 text-sm font-bold mb-1">⚠ تعذّر الاتصال بالخادم</p>
+                        <p class="text-slate-400 text-xs">قد يكون الووركر غير متاح حالياً. يمكنك حفظ الملخص بدون نصيحة.</p>
+                        <button id="retryAnalyzeBtn"
+                                class="mt-3 text-xs text-sky-300 hover:text-sky-100 font-medium transition-colors">
+                            ↻ إعادة المحاولة
+                        </button>
+                    </div>
+                `;
+                document.getElementById('retryAnalyzeBtn').addEventListener('click', analyzeSummary);
+            } finally {
+                analyzeBtn.disabled = false;
+                analyzeBtn.textContent = '🧠 تحليل بالذكاء الاصطناعي';
+            }
+        }
+
+        /**
+         * Save diary entry along with the AI advice.
+         */
+        function saveDiaryEntryWithAdvice(advice) {
+            const topic = topicInput.value.trim();
+            const summary = summaryInput.value.trim();
+
+            if (!summary) return;
+
+            const entry = {
+                id: generateId(),
+                subjectId: subjectSelect.value || null,
+                topic: topic || 'جلسة عامة',
+                summary: summary,
+                aiAdvice: advice,
+                reviews: scheduleReviews(),
+                timestamp: Date.now()
+            };
+
+            diary.unshift(entry);
+            saveDiary();
+
+            dailyStats.entries++;
+            saveStats();
+            updateStats();
+
+            topicInput.value = '';
+            summaryInput.value = '';
+            aiResult.classList.add('hidden');
+
+            renderDiary();
+            diaryList.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        /* =====================================================
+           Subjects — CRUD + Progress + Exam Countdown
+           ===================================================== */
+
+        function daysUntil(dateStr) {
+            if (!dateStr) return null;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const target = new Date(dateStr);
+            target.setHours(0, 0, 0, 0);
+            return Math.round((target - today) / (1000 * 60 * 60 * 24));
+        }
+
+        function addSubject() {
+            const name = newSubjectName.value.trim();
+            if (!name) {
+                newSubjectName.focus();
+                return;
+            }
+            const subject = {
+                id: generateId(),
+                name,
+                examDate: newSubjectExamDate.value || null,
+                progress: 0,
+                color: SUBJECT_COLORS[subjects.length % SUBJECT_COLORS.length]
+            };
+            subjects.push(subject);
+            saveSubjects();
+            newSubjectName.value = '';
+            newSubjectExamDate.value = '';
+            addSubjectForm.classList.add('hidden');
+            renderSubjects();
+            renderSubjectOptions();
+        }
+
+        function deleteSubject(id) {
+            subjects = subjects.filter(s => s.id !== id);
+            saveSubjects();
+            renderSubjects();
+            renderSubjectOptions();
+        }
+
+        function updateSubjectProgress(id, newProgress) {
+            const subject = subjects.find(s => s.id === id);
+            if (!subject) return;
+            subject.progress = Math.max(0, Math.min(100, newProgress));
+            saveSubjects();
+            renderSubjects();
+        }
+
+        function renderSubjectOptions() {
+            const optionsHtml = '<option value="">بدون مادة محددة</option>' +
+                subjects.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+            subjectSelect.innerHTML = optionsHtml;
+            mistakeSubjectSelect.innerHTML = '<option value="">مادة عامة</option>' +
+                subjects.map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
+        }
+
+        function renderSubjects() {
+            if (subjects.length === 0) {
+                subjectsEmptyState.style.display = 'block';
+                subjectsList.innerHTML = '';
+                return;
+            }
+            subjectsEmptyState.style.display = 'none';
+
+            subjectsList.innerHTML = subjects.map(s => {
+                const days = daysUntil(s.examDate);
+                let countdownHtml = '';
+                if (days !== null) {
+                    let text, colorClass;
+                    if (days < 0) { text = 'الامتحان خلص'; colorClass = 'text-slate-500'; }
+                    else if (days === 0) { text = 'الامتحان النهاردة! 💪'; colorClass = 'text-pink-400'; }
+                    else if (days <= 3) { text = `باقي ${days} يوم بس!`; colorClass = 'text-pink-400'; }
+                    else { text = `باقي ${days} يوم`; colorClass = 'text-sky-300'; }
+                    countdownHtml = `<div class="text-xs font-bold ${colorClass} mt-1">⏳ ${text}</div>`;
+                }
+
+                return `
+                    <div class="bg-slate-900/50 border rounded-xl p-4" style="border-color: ${s.color}40;">
+                        <div class="flex items-start justify-between gap-2 mb-2">
+                            <div>
+                                <h3 class="text-sm font-bold" style="color: ${s.color};">${escapeHtml(s.name)}</h3>
+                                ${countdownHtml}
+                            </div>
+                            <button class="delete-btn text-slate-500 p-1" data-action="delete-subject" data-id="${s.id}" title="حذف المادة">
+                                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <input type="range" min="0" max="100" step="5" value="${s.progress}"
+                                   data-action="progress" data-id="${s.id}"
+                                   class="flex-1 h-1.5 rounded-full appearance-none cursor-pointer"
+                                   style="accent-color: ${s.color};" />
+                            <span class="text-xs font-bold text-slate-300 w-10 text-left">${s.progress}%</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        /* =====================================================
+           Mistake Log
+           ===================================================== */
+
+        function addMistake() {
+            const text = mistakeText.value.trim();
+            if (!text) {
+                mistakeText.focus();
+                return;
+            }
+            mistakes.unshift({
+                id: generateId(),
+                subjectId: mistakeSubjectSelect.value || null,
+                text,
+                timestamp: Date.now()
+            });
+            saveMistakes();
+            mistakeText.value = '';
+            renderMistakes();
+        }
+
+        function deleteMistake(id) {
+            mistakes = mistakes.filter(m => m.id !== id);
+            saveMistakes();
+            renderMistakes();
+        }
+
+        function renderMistakes() {
+            if (mistakes.length === 0) {
+                mistakesEmptyState.style.display = 'block';
+                mistakesList.innerHTML = '';
+                return;
+            }
+            mistakesEmptyState.style.display = 'none';
+
+            mistakesList.innerHTML = mistakes.map(m => {
+                const subject = subjects.find(s => s.id === m.subjectId);
+                const label = subject ? subject.name : 'عام';
+                return `
+                    <div class="flex items-center justify-between gap-2 bg-slate-900/50 border border-pink-500/15 rounded-lg px-3 py-2">
+                        <div class="flex-1 min-w-0">
+                            <span class="text-[10px] text-pink-400 font-bold">${escapeHtml(label)}</span>
+                            <p class="text-sm text-slate-300 truncate">${escapeHtml(m.text)}</p>
+                        </div>
+                        <button class="delete-btn text-slate-500 p-1 flex-shrink-0" data-action="delete-mistake" data-id="${m.id}" title="حذف">
+                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        /* =====================================================
+           Spaced Repetition — Review Reminders
+           ===================================================== */
+
+        function scheduleReviews(entry) {
+            const now = Date.now();
+            const DAY = 24 * 60 * 60 * 1000;
+            return [
+                { due: now + DAY, done: false },
+                { due: now + 3 * DAY, done: false },
+                { due: now + 7 * DAY, done: false }
+            ];
+        }
+
+        function markReviewDone(entryId, reviewIndex) {
+            const entry = diary.find(d => d.id === entryId);
+            if (!entry || !entry.reviews || !entry.reviews[reviewIndex]) return;
+            entry.reviews[reviewIndex].done = true;
+            saveDiary();
+            renderReviews();
+        }
+
+        function renderReviews() {
+            const now = Date.now();
+            const dueItems = [];
+
+            diary.forEach(entry => {
+                if (!entry.reviews) return;
+                entry.reviews.forEach((rev, idx) => {
+                    if (!rev.done && rev.due <= now) {
+                        dueItems.push({ entryId: entry.id, topic: entry.topic, reviewIndex: idx });
+                    }
+                });
+            });
+
+            if (dueItems.length === 0) {
+                reviewsSection.classList.add('hidden');
+                return;
+            }
+
+            reviewsSection.classList.remove('hidden');
+            reviewsList.innerHTML = dueItems.map(item => `
+                <div class="flex items-center justify-between gap-2 bg-slate-900/50 border border-sky-500/20 rounded-lg px-3 py-2.5">
+                    <span class="text-sm text-slate-200">📌 ${escapeHtml(item.topic)}</span>
+                    <button class="text-xs bg-sky-600/30 hover:bg-sky-600/50 border border-sky-400/30 rounded-lg px-3 py-1.5 font-bold text-sky-200 transition-colors whitespace-nowrap"
+                            data-action="review-done" data-entry-id="${item.entryId}" data-review-idx="${item.reviewIndex}">
+                        ✅ تمت المراجعة
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        /* =====================================================
+           Weekly Chart
+           ===================================================== */
+
+        function renderWeeklyChart() {
+            const days = [];
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                days.push(d.toISOString().split('T')[0]);
+            }
+
+            const hoursPerDay = days.map(d => {
+                const rec = statsHistory[d] || { focusSeconds: 0 };
+                return rec.focusSeconds / 3600;
+            });
+            const maxHours = Math.max(1, ...hoursPerDay);
+
+            const dayNames = ['أحد', 'اثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
+
+            weeklyChart.innerHTML = days.map((d, i) => {
+                const hours = hoursPerDay[i];
+                const heightPct = Math.max(4, (hours / maxHours) * 100);
+                const dayIdx = new Date(d).getDay();
+                return `
+                    <div class="flex-1 flex flex-col items-center justify-end h-full gap-1">
+                        <span class="text-[10px] text-slate-400 font-bold">${hours > 0 ? hours.toFixed(1) : ''}</span>
+                        <div class="w-full rounded-t-md" style="height:${heightPct}%; background: linear-gradient(180deg, #a855f7, #38bdf8); min-height:4px;"></div>
+                        <span class="text-[10px] text-slate-500">${dayNames[dayIdx]}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        /* =====================================================
+           Rendering — Diary List & Stats
+           ===================================================== */
+
+        /**
+         * Render the diary list in the DOM.
+         */
+        function renderDiary() {
+            if (diary.length === 0) {
+                emptyState.style.display = 'flex';
+                diaryList.innerHTML = '';
+                clearAllBtn.classList.add('hidden');
+            } else {
+                emptyState.style.display = 'none';
+                clearAllBtn.classList.remove('hidden');
+
+                diaryList.innerHTML = diary.map((entry, index) => `
+                    <div class="diary-item glass-card rounded-xl p-4"
+                         data-id="${entry.id}"
+                         style="animation-delay: ${index * 0.05}s; border-color: rgba(168,85,247,0.15);">
+
+                        <!-- Header row: topic + date + delete -->
+                        <div class="flex items-start justify-between gap-3 mb-2">
+                            <div class="flex-1">
+                                <h3 class="text-sm font-bold text-purple-300 mb-1">${escapeHtml(entry.topic)}</h3>
+                                <span class="text-xs text-slate-500">${formatDate(entry.timestamp)}</span>
+                            </div>
+                            <button class="delete-btn text-slate-500 flex-shrink-0 p-1" data-action="delete" data-id="${entry.id}" title="حذف">
+                                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round"
+                                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <!-- Summary text -->
+                        <p class="text-sm text-slate-300 leading-relaxed mb-3">${escapeHtml(entry.summary)}</p>
+
+                        <!-- AI advice (if exists) -->
+                        ${entry.aiAdvice ? `
+                            <div class="bg-gradient-to-br from-purple-900/20 to-sky-900/20 border border-sky-500/20 rounded-lg p-3 mt-2">
+                                <div class="flex items-center gap-1.5 mb-1.5">
+                                    <span class="text-sky-400 text-xs">🧠</span>
+                                    <span class="text-xs text-sky-300 font-bold">نصيحة الذكاء الاصطناعي</span>
+                                </div>
+                                <p class="text-xs text-slate-400 leading-relaxed whitespace-pre-wrap">${escapeHtml(entry.aiAdvice)}</p>
+                            </div>
+                        ` : ''}
+
+                        <button class="text-xs font-bold text-sky-300 bg-sky-500/10 border border-sky-500/25 rounded-lg px-3 py-1.5 mt-3"
+                                data-action="quiz-entry" data-id="${entry.id}">
+                            🧠 اختبرني في الموضوع ده
+                        </button>
+                    </div>
+                `).join('');
+            }
+        }
+
+        /**
+         * Update the daily stats display.
+         */
+        function updateStats() {
+            statSessions.textContent = dailyStats.sessions;
+            statHours.textContent = (dailyStats.focusSeconds / 3600).toFixed(1);
+            statEntries.textContent = dailyStats.entries;
+        }
+
+        /* =====================================================
+           Screen Navigation
+           ===================================================== */
+        function openScreen(id) {
+            document.getElementById(id).classList.add('open');
+        }
+        function closeScreen(id) {
+            document.getElementById(id).classList.remove('open');
+        }
+
+        /* =====================================================
+           AI Chat (dedicated study assistant)
+           ===================================================== */
+        function loadStudyChat() {
+            try {
+                const data = localStorage.getItem(STUDY_CHAT_KEY);
+                return data ? JSON.parse(data) : [];
+            } catch (e) { return []; }
+        }
+        function saveStudyChat() {
+            try {
+                // ما نخزنش base64 الملفات في السجل عشان مايتخمش الـ localStorage — بس أسماءها
+                localStorage.setItem(STUDY_CHAT_KEY, JSON.stringify(studyChat));
+            } catch (e) { console.error('فشل حفظ المحادثة:', e); }
+        }
+
+        function renderStudyChat() {
+            if (studyChat.length === 0) {
+                chatMessagesArea.innerHTML = `<div class="text-center text-slate-500 text-sm py-10">
+                    اسألني عن أي درس أو مادة، أو ارفع صورة تمرين وهساعدك تفهمه 📚
+                </div>`;
+                return;
+            }
+            chatMessagesArea.innerHTML = studyChat.map(m => {
+                const isUser = m.role === 'user';
+                const attachHtml = (m.attachments && m.attachments.length)
+                    ? `<div class="text-[10px] opacity-60 mt-1">📎 ${m.attachments.length} مرفق</div>` : '';
+                return `
+                    <div style="display:flex; ${isUser ? 'justify-content:flex-end;' : 'justify-content:flex-start;'} margin-bottom:10px;">
+                        <div style="max-width:80%; padding:10px 14px; border-radius:14px; font-size:14px; line-height:1.6;
+                                    background:${isUser ? 'linear-gradient(135deg,#7c3aed,#0ea5e9)' : 'rgba(255,255,255,0.06)'};
+                                    color:${isUser ? '#fff' : '#e2e8f0'};">
+                            ${escapeHtml(m.text).replace(/\n/g, '<br>')}
+                            ${attachHtml}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            chatMessagesArea.scrollTop = chatMessagesArea.scrollHeight;
+        }
+
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function handleChatFiles(fileList) {
+            const files = Array.from(fileList);
+            if (pendingChatFiles.length + files.length > MAX_ATTACHMENTS) {
+                alert(`أقصى عدد مرفقات هو ${MAX_ATTACHMENTS} ملف دفعة واحدة`);
+                return;
+            }
+            const currentTotalMB = pendingChatFiles.reduce((s, f) => s + f.file.size, 0) / (1024 * 1024);
+            const newTotalMB = files.reduce((s, f) => s + f.size, 0) / (1024 * 1024);
+            if (currentTotalMB + newTotalMB > MAX_ATTACH_TOTAL_MB) {
+                alert(`أقصى حجم إجمالي للمرفقات هو ${MAX_ATTACH_TOTAL_MB} ميجابايت`);
+                return;
+            }
+
+            for (const file of files) {
+                try {
+                    const base64 = await fileToBase64(file);
+                    pendingChatFiles.push({ file, base64, mimeType: file.type, name: file.name });
+                } catch (e) {
+                    console.error('فشل قراءة الملف:', file.name, e);
+                }
+            }
+            renderAttachPreview();
+        }
+
+        function renderAttachPreview() {
+            chatAttachPreview.innerHTML = pendingChatFiles.map((f, idx) => `
+                <div class="flex items-center gap-1 bg-slate-800/70 border border-purple-500/20 rounded-lg px-2 py-1 text-[10px] text-slate-300">
+                    <span>📎 ${escapeHtml(f.name.slice(0, 18))}</span>
+                    <button data-remove-attach="${idx}" class="text-pink-400 font-bold">×</button>
+                </div>
+            `).join('');
+        }
+
+        async function sendChatMessage() {
+            const text = chatMsgInput.value.trim();
+            if (!text && pendingChatFiles.length === 0) return;
+
+            const userMsg = {
+                role: 'user',
+                text: text || '(مرفقات فقط)',
+                attachments: pendingChatFiles.map(f => ({ name: f.name, mimeType: f.mimeType }))
+            };
+            studyChat.push(userMsg);
+            saveStudyChat();
+            renderStudyChat();
+
+            const parts = [];
+            if (text) parts.push({ text });
+            pendingChatFiles.forEach(f => {
+                parts.push({ inlineData: { mimeType: f.mimeType, data: f.base64 } });
+            });
+
+            chatMsgInput.value = '';
+            pendingChatFiles = [];
+            renderAttachPreview();
+
+            // مؤشر "بيكتب..."
+            chatMessagesArea.insertAdjacentHTML('beforeend',
+                `<div id="chatTypingIndicator" style="text-align:right; color:#94a3b8; font-size:13px; margin-bottom:8px;">🤖 <span class="thinking-dots"><span>.</span><span>.</span><span>.</span></span></div>`);
+            chatMessagesArea.scrollTop = chatMessagesArea.scrollHeight;
+
+            try {
+                const model = 'gemini-3.1-flash-lite';
+                const response = await fetch(`${API_URL}?model=${model}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ role: 'user', parts }],
+                        systemInstruction: {
+                            parts: [{ text: 'أنت مساعد دراسي ذكي لطالب مصري في المرحلة الإعدادية أو الثانوية. اشرح الدروس بأسلوب مبسط وواضح، جاوب على الأسئلة الدراسية بدقة، وساعد في حل التمارين خطوة بخطوة. لو المستخدم رفع صورة تمرين أو درس، افهمها واشرحها. تحدث بالعربية الفصحى المبسطة أو العامية المصرية حسب أسلوب السؤال.' }]
+                        }
+                    })
+                });
+
+                document.getElementById('chatTypingIndicator')?.remove();
+
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+
+                let reply = '';
+                const candidate = data.candidates && data.candidates[0];
+                if (candidate && candidate.content && candidate.content.parts) {
+                    reply = candidate.content.parts.map(p => p.text || '').join('');
+                } else if (data.error) {
+                    throw new Error(data.error.message || 'API error');
+                }
+
+                studyChat.push({ role: 'model', text: reply || 'معلش، ماقدرتش أفهم السؤال، جرّب تاني.' });
+                saveStudyChat();
+                renderStudyChat();
+            } catch (err) {
+                document.getElementById('chatTypingIndicator')?.remove();
+                studyChat.push({ role: 'model', text: `⚠ حصل خطأ في الاتصال: ${err.message}` });
+                saveStudyChat();
+                renderStudyChat();
+            }
+        }
+
+        function exportChatToPdf() {
+            if (studyChat.length === 0) {
+                alert('مفيش محادثة تتصدّر لسه');
+                return;
+            }
+            const printWindow = window.open('', '_blank');
+            const bodyHtml = studyChat.map(m => `
+                <div style="margin-bottom:14px; text-align:${m.role === 'user' ? 'left' : 'right'};">
+                    <div style="display:inline-block; max-width:75%; padding:10px 14px; border-radius:12px;
+                                background:${m.role === 'user' ? '#ede9fe' : '#f1f5f9'}; color:#1e1b2e; font-size:14px; line-height:1.7;">
+                        <strong>${m.role === 'user' ? 'أنت' : 'المساعد'}:</strong><br>
+                        ${escapeHtml(m.text).replace(/\n/g, '<br>')}
+                    </div>
+                </div>
+            `).join('');
+            printWindow.document.write(`
+                <html dir="rtl" lang="ar"><head><meta charset="UTF-8">
+                <title>محادثة مساعد المذاكرة</title>
+                <style>body{font-family:Tahoma,Arial,sans-serif; padding:24px; background:#fff;} h1{font-size:18px;}</style>
+                </head><body>
+                <h1>📚 محادثة مساعد المذاكرة الذكي</h1>
+                ${bodyHtml}
+                </body></html>
+            `);
+            printWindow.document.close();
+            setTimeout(() => printWindow.print(), 400);
+        }
+
+        /* =====================================================
+           Tasks + Streak
+           ===================================================== */
+        function loadTasks() {
+            try {
+                const data = localStorage.getItem(TASKS_KEY);
+                return data ? JSON.parse(data) : [];
+            } catch (e) { return []; }
+        }
+        function saveTasks() {
+            try { localStorage.setItem(TASKS_KEY, JSON.stringify(tasks)); }
+            catch (e) { console.error('فشل حفظ المهام:', e); }
+        }
+
+        function addTask() {
+            const text = newTaskText.value.trim();
+            if (!text) { newTaskText.focus(); return; }
+            tasks.push({
+                id: generateId(),
+                text,
+                priority: newTaskPriority.value,
+                due: newTaskDue.value || null,
+                done: false,
+                postponed: false,
+                completedDate: null
+            });
+            saveTasks();
+            newTaskText.value = '';
+            newTaskDue.value = '';
+            renderTasks();
+        }
+
+        function toggleTaskDone(id) {
+            const task = tasks.find(t => t.id === id);
+            if (!task) return;
+            task.done = !task.done;
+            task.completedDate = task.done ? new Date().toISOString().split('T')[0] : null;
+            if (task.done) task.postponed = false;
+            saveTasks();
+            renderTasks();
+        }
+
+        function deleteTask(id) {
+            tasks = tasks.filter(t => t.id !== id);
+            saveTasks();
+            renderTasks();
+        }
+
+        function checkPostponedTasks() {
+            const now = Date.now();
+            let changed = false;
+            tasks.forEach(t => {
+                if (!t.done && !t.postponed && t.due && new Date(t.due).getTime() < now) {
+                    t.postponed = true;
+                    changed = true;
+                }
+            });
+            if (changed) saveTasks();
+        }
+
+        const priorityMeta = {
+            high:   { label: '🔴 عالية',  color: '#f43f5e' },
+            medium: { label: '🟡 متوسطة', color: '#f59e0b' },
+            low:    { label: '🟢 منخفضة', color: '#34d399' }
+        };
+        const priorityOrder = { high: 0, medium: 1, low: 2 };
+
+        function taskCardHtml(t) {
+            const meta = priorityMeta[t.priority] || priorityMeta.medium;
+            const dueText = t.due ? new Date(t.due).toLocaleString('ar-EG', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+            return `
+                <div class="flex items-center gap-3 bg-slate-900/50 border rounded-xl px-3 py-2.5" style="border-color:${meta.color}30;">
+                    <input type="checkbox" ${t.done ? 'checked' : ''} data-action="toggle-task" data-id="${t.id}"
+                           class="w-5 h-5 flex-shrink-0" style="accent-color:${meta.color};" />
+                    <div class="flex-1 min-w-0">
+                        <p class="text-sm ${t.done ? 'line-through text-slate-500' : 'text-slate-200'} truncate">${escapeHtml(t.text)}</p>
+                        <div class="flex items-center gap-2 text-[10px] mt-0.5">
+                            <span style="color:${meta.color};" class="font-bold">${meta.label}</span>
+                            ${dueText ? `<span class="text-slate-500">📅 ${dueText}</span>` : ''}
+                        </div>
+                    </div>
+                    <button class="delete-btn text-slate-500 p-1 flex-shrink-0" data-action="delete-task" data-id="${t.id}">
+                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            `;
+        }
+
+        function renderTasks() {
+            checkPostponedTasks();
+
+            const active = tasks.filter(t => !t.postponed || t.done)
+                .sort((a, b) => (priorityOrder[a.priority] ?? 1) - (priorityOrder[b.priority] ?? 1));
+            const postponed = tasks.filter(t => t.postponed && !t.done);
+
+            activeTasksList.innerHTML = active.map(taskCardHtml).join('');
+            activeTasksEmpty.style.display = active.length ? 'none' : 'block';
+
+            postponedTasksList.innerHTML = postponed.map(taskCardHtml).join('');
+            postponedTasksEmpty.style.display = postponed.length ? 'none' : 'block';
+
+            renderStreak();
+        }
+
+        function computeStreak() {
+            const activeDates = new Set();
+            Object.entries(statsHistory).forEach(([date, rec]) => {
+                if (rec.sessions > 0) activeDates.add(date);
+            });
+            tasks.forEach(t => { if (t.completedDate) activeDates.add(t.completedDate); });
+
+            let streak = 0;
+            let cursor = new Date();
+            while (true) {
+                const key = cursor.toISOString().split('T')[0];
+                if (activeDates.has(key)) {
+                    streak++;
+                    cursor.setDate(cursor.getDate() - 1);
+                } else {
+                    break;
+                }
+            }
+            return streak;
+        }
+
+        function renderStreak() {
+            const streak = computeStreak();
+            streakBadge.textContent = streak > 0 ? `🔥 ${streak} يوم متتالي` : '';
+        }
+
+        /* =====================================================
+           Weekly Schedule
+           ===================================================== */
+        function loadSchedule() {
+            try {
+                const data = localStorage.getItem(SCHEDULE_KEY);
+                return data ? JSON.parse(data) : {};
+            } catch (e) { return {}; }
+        }
+        function saveSchedule() {
+            try { localStorage.setItem(SCHEDULE_KEY, JSON.stringify(schedule)); }
+            catch (e) { console.error('فشل حفظ الجدول:', e); }
+        }
+
+        function addScheduleEntry(day) {
+            const timeInput = document.getElementById(`sch-time-${day}`);
+            const subjInput = document.getElementById(`sch-subj-${day}`);
+            const time = timeInput.value.trim();
+            const subj = subjInput.value.trim();
+            if (!subj) { subjInput.focus(); return; }
+            if (!schedule[day]) schedule[day] = [];
+            schedule[day].push({ time, subject: subj });
+            saveSchedule();
+            timeInput.value = '';
+            subjInput.value = '';
+            renderSchedule();
+        }
+
+        function deleteScheduleEntry(day, idx) {
+            if (!schedule[day]) return;
+            schedule[day].splice(idx, 1);
+            saveSchedule();
+            renderSchedule();
+        }
+
+        function renderSchedule() {
+            scheduleGrid.innerHTML = WEEK_DAYS.map(day => {
+                const entries = schedule[day] || [];
+                const entriesHtml = entries.map((e, idx) => `
+                    <div class="flex items-center justify-between gap-2 bg-slate-800/50 rounded-lg px-2.5 py-1.5 text-xs">
+                        <span class="text-slate-300">${e.time ? `<span class="text-sky-300 font-bold">${escapeHtml(e.time)}</span> — ` : ''}${escapeHtml(e.subject)}</span>
+                        <button data-action="delete-sch" data-day="${day}" data-idx="${idx}" class="text-pink-400 font-bold px-1">×</button>
+                    </div>
+                `).join('');
+
+                return `
+                    <div class="glass-card rounded-xl p-3">
+                        <h4 class="text-xs font-bold text-purple-300 mb-2">${day}</h4>
+                        <div class="space-y-1.5 mb-2">${entriesHtml || '<p class="text-[11px] text-slate-600">مفيش حصص مضافة</p>'}</div>
+                        <div class="flex gap-1.5">
+                            <input type="text" id="sch-time-${day}" placeholder="الساعة" class="w-16 bg-slate-900/70 border border-purple-500/20 rounded-lg px-2 py-1 text-[11px] text-slate-200" />
+                            <input type="text" id="sch-subj-${day}" placeholder="اسم المادة" class="flex-1 bg-slate-900/70 border border-purple-500/20 rounded-lg px-2 py-1 text-[11px] text-slate-200" />
+                            <button data-action="add-sch" data-day="${day}" class="bg-purple-600/30 border border-purple-400/30 rounded-lg px-2 text-[11px] text-purple-200 font-bold">+</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            const hasEntries = WEEK_DAYS.some(day => (schedule[day] || []).length > 0);
+            exportSchedulePdfBtn.classList.toggle("hidden", !hasEntries);
+        }
+
+        function exportScheduleToPdf() {
+            const hasEntries = WEEK_DAYS.some(day => (schedule[day] || []).length > 0);
+            if (!hasEntries) {
+                alert('لسه ماضفتش أي حصص في الجدول');
+                return;
+            }
+
+            const rowsHtml = WEEK_DAYS.map(day => {
+                const entries = (schedule[day] || []).slice().sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+                if (entries.length === 0) return '';
+                const dayCellHtml = entries.map((e, idx) => `
+                    <tr>
+                        ${idx === 0 ? `<td rowspan="${entries.length}" style="background:#ede9fe; font-weight:bold; text-align:center; vertical-align:middle; padding:10px; border:1px solid #ddd; width:110px;">${day}</td>` : ''}
+                        <td style="padding:8px 10px; border:1px solid #ddd; text-align:center; width:90px; color:#334155;">${escapeHtml(e.time || '—')}</td>
+                        <td style="padding:8px 10px; border:1px solid #ddd; color:#1e293b;">${escapeHtml(e.subject)}</td>
+                    </tr>
+                `).join('');
+                return dayCellHtml;
+            }).join('');
+
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <html dir="rtl" lang="ar"><head><meta charset="UTF-8">
+                <title>الجدول الدراسي</title>
+                <style>
+                    body { font-family: Tahoma, Arial, sans-serif; padding: 24px; background:#fff; color:#1e293b; }
+                    h1 { font-size: 20px; text-align:center; margin-bottom: 4px; }
+                    p.sub { text-align:center; color:#64748b; font-size:12px; margin-bottom:20px; }
+                    table { width:100%; border-collapse: collapse; }
+                    th { background:#7c3aed; color:#fff; padding:10px; border:1px solid #ddd; font-size:13px; }
+                </style>
+                </head><body>
+                <h1>📅 الجدول الدراسي الأسبوعي</h1>
+                <p class="sub">مساعد المذاكرة الذكي</p>
+                <table>
+                    <thead><tr><th>اليوم</th><th>الميعاد</th><th>المادة</th></tr></thead>
+                    <tbody>${rowsHtml}</tbody>
+                </table>
+                </body></html>
+            `);
+            printWindow.document.close();
+            setTimeout(() => printWindow.print(), 400);
+        }
+
+        function handleScheduleFile(file) {
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                try {
+                    localStorage.setItem(SCHEDULE_FILE_KEY, JSON.stringify({
+                        name: file.name, mimeType: file.type, data: reader.result
+                    }));
+                    renderScheduleFileButtons();
+                } catch (e) {
+                    alert('الملف كبير جدًا على الحفظ محليًا، جرّب ملف أصغر');
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function renderScheduleFileButtons() {
+            const saved = localStorage.getItem(SCHEDULE_FILE_KEY);
+            viewScheduleFileBtn.classList.toggle('hidden', !saved);
+            removeScheduleFileBtn.classList.toggle('hidden', !saved);
+        }
+
+        /* =====================================================
+           Flashcards
+           ===================================================== */
+        function loadFlashcards() {
+            try {
+                const data = localStorage.getItem(FLASHCARDS_KEY);
+                return data ? JSON.parse(data) : [];
+            } catch (e) { return []; }
+        }
+        function saveFlashcards() {
+            try { localStorage.setItem(FLASHCARDS_KEY, JSON.stringify(flashcards)); }
+            catch (e) { console.error('فشل حفظ البطاقات:', e); }
+        }
+
+        function addFlashcard() {
+            const term = newFlashTerm.value.trim();
+            const def = newFlashDef.value.trim();
+            if (!term || !def) { (term ? newFlashDef : newFlashTerm).focus(); return; }
+            flashcards.push({ id: generateId(), term, definition: def, source: 'manual' });
+            saveFlashcards();
+            newFlashTerm.value = '';
+            newFlashDef.value = '';
+            renderFlashcards();
+        }
+
+        function deleteFlashcard(id) {
+            flashcards = flashcards.filter(f => f.id !== id);
+            flippedCards.delete(id);
+            saveFlashcards();
+            renderFlashcards();
+        }
+
+        function toggleFlip(id) {
+            if (flippedCards.has(id)) flippedCards.delete(id);
+            else flippedCards.add(id);
+            renderFlashcards();
+        }
+
+        function flashCardSlotHtml(f, idx) {
+            const isFlipped = flippedCards.has(f.id);
+            return `
+                <div class="flash-card-slot flash-scene" style="animation-delay:${Math.min(idx, 12) * 0.04}s;">
+                    <div class="flash-inner ${isFlipped ? 'flipped' : ''}" data-action="flip-card" data-id="${f.id}">
+                        <div class="flash-face front glass-card" style="cursor:pointer;">
+                            <button class="delete-btn text-slate-600 p-1 absolute" style="top:6px; left:6px;" data-action="delete-flash" data-id="${f.id}">
+                                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                            <span class="text-[10px] text-slate-500 mb-1">المصطلح</span>
+                            <span class="text-sm font-bold text-purple-300 px-1" style="word-break:break-word;">${escapeHtml(f.term)}</span>
+                        </div>
+                        <div class="flash-face back glass-card" style="cursor:pointer; border-color: rgba(56,189,248,0.3);">
+                            <span class="text-[10px] text-slate-500 mb-1">المعنى</span>
+                            <span class="text-xs font-bold text-sky-300 px-1" style="word-break:break-word;">${escapeHtml(f.definition)}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderFlashcards() {
+            const aiCards = flashcards.filter(f => f.source === 'ai');
+            const manualCards = flashcards.filter(f => f.source !== 'ai');
+
+            flashcardsEmpty.style.display = flashcards.length === 0 ? 'block' : 'none';
+
+            aiFlashSection.classList.toggle('hidden', aiCards.length === 0);
+            flashcardsGridAi.innerHTML = aiCards.map((f, idx) => flashCardSlotHtml(f, idx)).join('');
+
+            manualFlashSection.classList.toggle('hidden', manualCards.length === 0);
+            flashcardsGridManual.innerHTML = manualCards.map((f, idx) => flashCardSlotHtml(f, idx)).join('');
+        }
+
+        /* =====================================================
+           Quiz Generator (AI-powered, based on a diary entry)
+           ===================================================== */
+        async function generateQuizForEntry(entryId) {
+            const entry = diary.find(d => d.id === entryId);
+            if (!entry) return;
+
+            openScreen('quizScreen');
+            quizBody.innerHTML = `<div class="text-center text-slate-400 text-sm py-10">🧠 بيولّد أسئلة من الموضوع ده...</div>`;
+
+            try {
+                const model = 'gemini-3.1-flash-lite';
+                const prompt = `بناءً على الملخص الدراسي ده:\n"${entry.summary}"\n\nولّد 5 أسئلة اختيار من متعدد لاختبار الفهم. رجّع النتيجة كـ JSON array فقط بدون أي نص إضافي، بالشكل ده بالظبط:\n[{"question":"...","options":["...","...","...","..."],"correctIndex":0}]`;
+
+                const response = await fetch(`${API_URL}?model=${model}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                        systemInstruction: { parts: [{ text: 'أنت مولّد أسئلة اختبارات تعليمية. رد بصيغة JSON صحيحة فقط، بدون أي شرح أو نص خارج الـ JSON.' }] }
+                    })
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                const candidate = data.candidates && data.candidates[0];
+                let raw = candidate?.content?.parts?.map(p => p.text || '').join('') || '';
+                raw = raw.replace(/```json|```/g, '').trim();
+                const questions = JSON.parse(raw);
+
+                renderQuiz(questions, 0, 0);
+            } catch (err) {
+                quizBody.innerHTML = `<div class="text-center text-pink-300 text-sm py-10">⚠ تعذّر توليد الأسئلة: ${escapeHtml(err.message)}</div>`;
+            }
+        }
+
+        function renderQuiz(questions, currentIdx, score) {
+            if (currentIdx >= questions.length) {
+                quizBody.innerHTML = `
+                    <div class="text-center py-10">
+                        <div class="text-4xl mb-3">🎉</div>
+                        <h3 class="text-lg font-bold text-purple-300 mb-2">خلصت الاختبار!</h3>
+                        <p class="text-slate-300">نتيجتك: <span class="text-sky-300 font-bold">${score} / ${questions.length}</span></p>
+                    </div>
+                `;
+                return;
+            }
+
+            const q = questions[currentIdx];
+            quizBody.innerHTML = `
+                <div class="text-xs text-slate-500 mb-2">سؤال ${currentIdx + 1} من ${questions.length}</div>
+                <h3 class="text-sm font-bold text-slate-100 mb-4">${escapeHtml(q.question)}</h3>
+                <div class="space-y-2" id="quizOptions">
+                    ${q.options.map((opt, i) => `
+                        <button class="quiz-opt w-full text-right bg-slate-900/50 border border-purple-500/20 rounded-xl px-4 py-3 text-sm text-slate-200"
+                                data-idx="${i}">
+                            ${escapeHtml(opt)}
+                        </button>
+                    `).join('')}
+                </div>
+            `;
+
+            document.getElementById('quizOptions').querySelectorAll('.quiz-opt').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const chosen = Number(btn.dataset.idx);
+                    const correct = q.correctIndex;
+                    document.getElementById('quizOptions').querySelectorAll('.quiz-opt').forEach((b, i) => {
+                        b.disabled = true;
+                        if (i === correct) b.style.borderColor = '#34d399';
+                        if (i === chosen && chosen !== correct) b.style.borderColor = '#f43f5e';
+                    });
+                    setTimeout(() => renderQuiz(questions, currentIdx + 1, score + (chosen === correct ? 1 : 0)), 900);
+                });
+            });
+        }
+
+        /* =====================================================
+           Stats Screen
+           ===================================================== */
+        function renderStatsScreen() {
+            statStreakBig.textContent = computeStreak();
+
+            const totalSessions = Object.values(statsHistory).reduce((s, r) => s + (r.sessions || 0), 0);
+            const totalSeconds = Object.values(statsHistory).reduce((s, r) => s + (r.focusSeconds || 0), 0);
+            statTotalSessions.textContent = totalSessions;
+            statTotalHours.textContent = (totalSeconds / 3600).toFixed(1);
+            statTotalTasks.textContent = tasks.filter(t => t.done).length;
+
+            // Weekly chart (reuse the same 7-day logic)
+            const days = [];
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date();
+                d.setDate(d.getDate() - i);
+                days.push(d.toISOString().split('T')[0]);
+            }
+            const hoursPerDay = days.map(d => (statsHistory[d]?.focusSeconds || 0) / 3600);
+            const maxHours = Math.max(1, ...hoursPerDay);
+            const dayNames = ['أحد', 'اثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
+            statsWeeklyChart.innerHTML = days.map((d, i) => {
+                const heightPct = Math.max(4, (hoursPerDay[i] / maxHours) * 100);
+                const dayIdx = new Date(d).getDay();
+                return `
+                    <div class="flex-1 flex flex-col items-center justify-end h-full gap-1">
+                        <span class="text-[10px] text-slate-400 font-bold">${hoursPerDay[i] > 0 ? hoursPerDay[i].toFixed(1) : ''}</span>
+                        <div class="w-full rounded-t-md" style="height:${heightPct}%; background: linear-gradient(180deg, #a855f7, #38bdf8); min-height:4px;"></div>
+                        <span class="text-[10px] text-slate-500">${dayNames[dayIdx]}</span>
+                    </div>
+                `;
+            }).join('');
+
+            // Subjects progress bars
+            if (subjects.length === 0) {
+                statsSubjectsBars.innerHTML = `<p class="text-xs text-slate-500 text-center py-3">لسه مضفتش مواد</p>`;
+            } else {
+                statsSubjectsBars.innerHTML = subjects.map(s => `
+                    <div>
+                        <div class="flex items-center justify-between text-xs mb-1">
+                            <span style="color:${s.color};" class="font-bold">${escapeHtml(s.name)}</span>
+                            <span class="text-slate-400">${s.progress}%</span>
+                        </div>
+                        <div class="w-full bg-slate-800/60 rounded-full h-2">
+                            <div class="h-2 rounded-full" style="width:${s.progress}%; background:${s.color};"></div>
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        /* =====================================================
+           Backup Export / Import
+           ===================================================== */
+        const ALL_BACKUP_KEYS = [
+            STORAGE_KEY, STATS_KEY, STATS_HISTORY_KEY, SUBJECTS_KEY, MISTAKES_KEY,
+            STUDY_CHAT_KEY, TASKS_KEY, SCHEDULE_KEY, SCHEDULE_FILE_KEY, FLASHCARDS_KEY
+        ];
+
+        // كل مرة أي جزء من الموقع يحفظ بيانات محليًا، نبعتها للسحابة كمان (لو المستخدم مسجّل دخول)
+        (function hookCloudSync() {
+            const originalSetItem = localStorage.setItem.bind(localStorage);
+            localStorage.setItem = function (key, value) {
+                originalSetItem(key, value);
+                if (ALL_BACKUP_KEYS.includes(key)) scheduleCloudSync();
+            };
+        })();
+
+        function importBackup(file) {
+            const reader = new FileReader();
+            reader.onload = () => {
+                try {
+                    const backup = JSON.parse(reader.result);
+                    Object.entries(backup).forEach(([key, val]) => {
+                        if (ALL_BACKUP_KEYS.includes(key)) localStorage.setItem(key, val);
+                    });
+                    alert('✅ تم استرجاع النسخة الاحتياطية بنجاح، هيتم تحديث الصفحة دلوقتي.');
+                    location.reload();
+                } catch (e) {
+                    alert('⚠ ملف النسخة الاحتياطية غير صالح');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        /* =====================================================
+           AI Flashcard Generation from Lesson File
+           ===================================================== */
+        function renderLessonFilesPreview() {
+            lessonFilesPreview.innerHTML = lessonAttachments.map((f, idx) => `
+                <div class="flex items-center gap-1 bg-slate-800/70 border border-purple-500/20 rounded-lg px-2 py-1 text-[10px] text-slate-300">
+                    <span>📎 ${escapeHtml(f.name.slice(0, 16))}</span>
+                    <button data-remove-lesson-file="${idx}" class="text-pink-400 font-bold">×</button>
+                </div>
+            `).join('');
+
+            const hasFiles = lessonAttachments.length > 0;
+            generateFlashcardsBtn.disabled = !hasFiles;
+            generateFlashcardsBtn.classList.toggle('opacity-40', !hasFiles);
+            generateFlashcardsBtn.classList.toggle('pointer-events-none', !hasFiles);
+        }
+
+        async function handleLessonFiles(fileList) {
+            const files = Array.from(fileList);
+            if (lessonAttachments.length + files.length > MAX_ATTACHMENTS) {
+                alert(`أقصى عدد ملفات هو ${MAX_ATTACHMENTS} ملف دفعة واحدة`);
+                return;
+            }
+            const currentTotalMB = lessonAttachments.reduce((s, f) => s + (f.sizeBytes || 0), 0) / (1024 * 1024);
+            const newTotalMB = files.reduce((s, f) => s + f.size, 0) / (1024 * 1024);
+            if (currentTotalMB + newTotalMB > MAX_ATTACH_TOTAL_MB) {
+                alert(`أقصى حجم إجمالي للملفات هو ${MAX_ATTACH_TOTAL_MB} ميجابايت`);
+                return;
+            }
+
+            for (const file of files) {
+                try {
+                    const base64 = await fileToBase64(file);
+                    lessonAttachments.push({ base64, mimeType: file.type, name: file.name, sizeBytes: file.size });
+                } catch (e) {
+                    console.error('فشل قراءة الملف:', file.name, e);
+                }
+            }
+            renderLessonFilesPreview();
+        }
+
+        async function generateFlashcardsFromLesson() {
+            if (lessonAttachments.length === 0) return;
+
+            const requestedCount = Math.max(1, Math.min(50, Number(flashCountInput.value) || 20));
+
+            generateFlashcardsBtn.disabled = true;
+            generateFlashcardsBtnText.innerHTML = `بيولّد البطاقات <span class="thinking-dots"><span>.</span><span>.</span><span>.</span></span>`;
+
+            try {
+                const model = 'gemini-3.1-flash-lite';
+                const prompt = `استخرج من محتوى الدرس المرفق (قد يكون أكتر من صورة أو ملف) أهم المصطلحات والتعريفات، وولّد بالظبط ${requestedCount} بطاقة مراجعة لو المحتوى فيه معلومات كفاية. لو المحتوى مش فيه معلومات كافية لـ ${requestedCount} بطاقة، ولّد أقل عدد ممكن يكون منطقي ومفيد بس متلقطش أو تختلق معلومات مش موجودة في المحتوى. رجّع النتيجة كـ JSON array فقط بدون أي نص إضافي، بالشكل ده بالظبط: [{"term":"...","definition":"..."}]`;
+
+                const parts = [{ text: prompt }];
+                lessonAttachments.forEach(f => {
+                    parts.push({ inlineData: { mimeType: f.mimeType, data: f.base64 } });
+                });
+
+                const response = await fetch(`${API_URL}?model=${model}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ role: 'user', parts }],
+                        systemInstruction: { parts: [{ text: 'أنت مساعد تعليمي متخصص في تلخيص الدروس لبطاقات مراجعة. رد بصيغة JSON صحيحة فقط، ولا تختلق معلومات غير موجودة في المحتوى المرفق.' }] }
+                    })
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const data = await response.json();
+                const candidate = data.candidates && data.candidates[0];
+                let raw = candidate?.content?.parts?.map(p => p.text || '').join('') || '';
+                raw = raw.replace(/```json|```/g, '').trim();
+                const cards = JSON.parse(raw).slice(0, 50);
+
+                cards.forEach(c => {
+                    if (c.term && c.definition) {
+                        flashcards.push({ id: generateId(), term: c.term, definition: c.definition, source: 'ai' });
+                    }
+                });
+                saveFlashcards();
+                renderFlashcards();
+
+                // Clear attachments after a successful generation
+                lessonAttachments = [];
+                renderLessonFilesPreview();
+
+                if (cards.length < requestedCount) {
+                    showToast(`⚠ الدرس اللي بعتّه مفيهوش معلومات كفاية، تم توليد ${cards.length} بطاقة بس بدل ${requestedCount}`);
+                } else {
+                    showToast(`✅ تم توليد ${cards.length} بطاقة من الدرس`);
+                }
+            } catch (err) {
+                alert(`⚠ تعذّر توليد البطاقات: ${err.message}`);
+            } finally {
+                generateFlashcardsBtnText.textContent = '✨ توليد أسئلة بالذكاء الاصطناعي';
+            }
+        }
+
+        /* =====================================================
+           Event Listeners
+           ===================================================== */
+
+        // ---- Timer controls ----
+        startPauseBtn.addEventListener('click', startPauseTimer);
+        resetBtn.addEventListener('click', resetTimer);
+        skipBtn.addEventListener('click', skipSession);
+
+        // ---- Diary controls ----
+        saveDiaryBtn.addEventListener('click', saveDiaryEntry);
+        analyzeBtn.addEventListener('click', analyzeSummary);
+
+        // ---- Diary list: event delegation for delete ----
+        diaryList.addEventListener('click', (e) => {
+            const action = e.target.closest('[data-action]')?.dataset.action;
+            const id = e.target.closest('[data-action]')?.dataset.id;
+            if (action === 'delete' && id) deleteDiaryEntry(id);
+            if (action === 'quiz-entry' && id) generateQuizForEntry(id);
+        });
+
+        // ---- Clear all ----
+        clearAllBtn.addEventListener('click', clearAllDiary);
+
+        // ---- Screen navigation ----
+        document.querySelectorAll('.tool-square[data-open]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                openScreen(btn.dataset.open);
+                if (btn.dataset.open === 'statsScreen') renderStatsScreen();
+            });
+        });
+        document.getElementById('openAiChatBtn').addEventListener('click', () => openScreen('aiChatScreen'));
+        document.getElementById('openAiChatBtn2').addEventListener('click', () => openScreen('aiChatScreen'));
+        document.querySelectorAll('[data-close]').forEach(btn => {
+            btn.addEventListener('click', () => closeScreen(btn.dataset.close));
+        });
+
+        // ---- Backup ----
+        importBackupInput.addEventListener('change', (e) => {
+            if (e.target.files[0]) importBackup(e.target.files[0]);
+            e.target.value = '';
+        });
+
+        // ---- AI Flashcard generation ----
+        lessonFileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) handleLessonFiles(e.target.files);
+            e.target.value = '';
+        });
+        lessonFilesPreview.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-remove-lesson-file]');
+            if (btn) {
+                lessonAttachments.splice(Number(btn.dataset.removeLessonFile), 1);
+                renderLessonFilesPreview();
+            }
+        });
+        generateFlashcardsBtn.addEventListener('click', generateFlashcardsFromLesson);
+
+        // ---- AI Chat ----
+        chatSendBtn.addEventListener('click', sendChatMessage);
+        chatMsgInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChatMessage(); });
+        chatFileInput.addEventListener('change', (e) => { handleChatFiles(e.target.files); e.target.value = ''; });
+        chatAttachPreview.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-remove-attach]');
+            if (btn) { pendingChatFiles.splice(Number(btn.dataset.removeAttach), 1); renderAttachPreview(); }
+        });
+        exportChatPdfBtn.addEventListener('click', exportChatToPdf);
+
+        // ---- Tasks ----
+        addTaskBtn.addEventListener('click', addTask);
+        newTaskText.addEventListener('keydown', (e) => { if (e.key === 'Enter') addTask(); });
+        activeTasksList.addEventListener('click', (e) => {
+            const toggle = e.target.closest('[data-action="toggle-task"]');
+            const del = e.target.closest('[data-action="delete-task"]');
+            if (toggle) toggleTaskDone(toggle.dataset.id);
+            if (del) deleteTask(del.dataset.id);
+        });
+        postponedTasksList.addEventListener('click', (e) => {
+            const toggle = e.target.closest('[data-action="toggle-task"]');
+            const del = e.target.closest('[data-action="delete-task"]');
+            if (toggle) toggleTaskDone(toggle.dataset.id);
+            if (del) deleteTask(del.dataset.id);
+        });
+
+        // ---- Schedule ----
+        scheduleGrid.addEventListener('click', (e) => {
+            const addBtn = e.target.closest('[data-action="add-sch"]');
+            const delBtn = e.target.closest('[data-action="delete-sch"]');
+            if (addBtn) addScheduleEntry(addBtn.dataset.day);
+            if (delBtn) deleteScheduleEntry(delBtn.dataset.day, Number(delBtn.dataset.idx));
+        });
+        scheduleFileInput.addEventListener('change', (e) => {
+            if (e.target.files[0]) handleScheduleFile(e.target.files[0]);
+            e.target.value = '';
+        });
+        viewScheduleFileBtn.addEventListener('click', () => {
+            const saved = JSON.parse(localStorage.getItem(SCHEDULE_FILE_KEY) || 'null');
+            if (!saved) return;
+            const win = window.open();
+            win.document.write(saved.mimeType.includes('pdf')
+                ? `<iframe src="${saved.data}" style="width:100%;height:100vh;border:0;"></iframe>`
+                : `<img src="${saved.data}" style="max-width:100%;">`);
+        });
+        exportSchedulePdfBtn.addEventListener('click', exportScheduleToPdf);
+        removeScheduleFileBtn.addEventListener('click', () => {
+            localStorage.removeItem(SCHEDULE_FILE_KEY);
+            renderScheduleFileButtons();
+        });
+
+        // ---- Flashcards ----
+        addFlashcardBtn.addEventListener('click', addFlashcard);
+        function handleFlashcardsClick(e) {
+            const delBtn = e.target.closest('[data-action="delete-flash"]');
+            const cardEl = e.target.closest('[data-action="flip-card"]');
+            if (delBtn) { deleteFlashcard(delBtn.dataset.id); return; }
+            if (cardEl) toggleFlip(cardEl.dataset.id);
+        }
+        flashcardsGridAi.addEventListener('click', handleFlashcardsClick);
+        flashcardsGridManual.addEventListener('click', handleFlashcardsClick);
+
+        // ---- Subjects ----
+        addSubjectToggleBtn.addEventListener('click', () => {
+            addSubjectForm.classList.toggle('hidden');
+            if (!addSubjectForm.classList.contains('hidden')) newSubjectName.focus();
+        });
+        confirmAddSubjectBtn.addEventListener('click', addSubject);
+        newSubjectName.addEventListener('keydown', (e) => { if (e.key === 'Enter') addSubject(); });
+
+        subjectsList.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-action="delete-subject"]');
+            if (btn) deleteSubject(btn.dataset.id);
+        });
+        subjectsList.addEventListener('input', (e) => {
+            if (e.target.dataset.action === 'progress') {
+                updateSubjectProgress(e.target.dataset.id, Number(e.target.value));
+            }
+        });
+
+        // ---- Mistakes ----
+        addMistakeBtn.addEventListener('click', addMistake);
+        mistakeText.addEventListener('keydown', (e) => { if (e.key === 'Enter') addMistake(); });
+        mistakesList.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-action="delete-mistake"]');
+            if (btn) deleteMistake(btn.dataset.id);
+        });
+
+        // ---- Reviews ----
+        reviewsList.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-action="review-done"]');
+            if (btn) markReviewDone(btn.dataset.entryId, Number(btn.dataset.reviewIdx));
+        });
+
+        // ---- Keyboard shortcuts ----
+        document.addEventListener('keydown', (e) => {
+            // Spacebar toggles timer (unless typing in input/textarea)
+            if (e.code === 'Space' && !['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+                e.preventDefault();
+                startPauseTimer();
+            }
+        });
+
+        /* =====================================================
+           App Initialization
+           ===================================================== */
+        function initializeAppUI() {
+            diary = loadDiary();
+            dailyStats = loadStats();
+            statsHistory = loadStatsHistory();
+            subjects = loadSubjects();
+            mistakes = loadMistakes();
+            studyChat = loadStudyChat();
+            tasks = loadTasks();
+            schedule = loadSchedule();
+            flashcards = loadFlashcards();
+
+            updateTimerDisplay();
+            updateStats();
+            renderDiary();
+            renderSubjectOptions();
+            renderSubjects();
+            renderMistakes();
+            renderReviews();
+            renderWeeklyChart();
+            renderStudyChat();
+            renderTasks();
+            renderSchedule();
+            renderScheduleFileButtons();
+            renderFlashcards();
+        }
+
+        initializeAppUI();
+    </script>
+</body>
+</html>
